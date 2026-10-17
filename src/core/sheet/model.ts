@@ -108,10 +108,11 @@ export function defaultArrangement(style = "rock"): Arrangement {
     swing: 0,
     humanize: 0.35,
     countIn: 1,
+    // Default band is a trio — electric piano, bass, drums — so the jammer owns the guitar space.
     tracks: {
-      piano: { enabled: true, volume: 0.8, instrument: "piano" },
-      guitar: { enabled: true, volume: 0.7, instrument: "guitarClean" },
-      distGuitar: { enabled: style === "rock", volume: 0.6, instrument: "guitarDist" },
+      piano: { enabled: true, volume: 0.8, instrument: "epiano" },
+      guitar: { enabled: false, volume: 0.7, instrument: "guitarClean" },
+      distGuitar: { enabled: false, volume: 0.6, instrument: "guitarDist" },
       bass: { enabled: true, volume: 0.9, instrument: "bass" },
       drums: { enabled: true, volume: 0.9, instrument: "drums" },
     },

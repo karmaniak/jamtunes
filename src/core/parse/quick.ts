@@ -89,8 +89,16 @@ export function parseChordLine(line: string, ts: TimeSignature, defaultBeats: nu
   for (const seg of segments) {
     const pending: Pending[] = [];
     const tokens = seg.split(/\s+/).filter(Boolean);
+    let groupStart = 0; // "Cmaj7 D x4 Em" repeats everything since the previous marker
     for (const raw of tokens) {
       let tok = raw.replace(/,$/, "");
+      const rep = /^\(?[x×](\d+)\)?$/i.exec(tok);
+      if (rep) {
+        const group = pending.slice(groupStart);
+        for (let n = 1; n < Number(rep[1]); n++) pending.push(...group.map((p) => ({ ...p })));
+        groupStart = pending.length;
+        continue;
+      }
       if (tok === "." || tok === "/" || tok === "%") {
         if (pending.length) pending[pending.length - 1].dots += 1;
         else if (items.length) items[items.length - 1].beats += 1;

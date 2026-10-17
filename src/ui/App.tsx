@@ -6,6 +6,7 @@ import { SheetView } from "./components/SheetView";
 import { InputPanel } from "./components/InputPanel";
 import { Mixer } from "./components/Mixer";
 import { ChatPanel } from "./components/ChatPanel";
+import { ArrangementView } from "./components/ArrangementView";
 
 export function App() {
   const jam = useJam();
@@ -46,8 +47,11 @@ export function App() {
           <Mixer jam={jam} />
         </aside>
         <main className="sheet-area">
-          <SheetView jam={jam} />
-          {debug && <pre className="debug">{describeTimeline(jam.timeline)}</pre>}
+          <div className="sheet-scroll">
+            <SheetView jam={jam} />
+            {debug && <pre className="debug">{describeTimeline(jam.timeline)}</pre>}
+          </div>
+          <ArrangementView jam={jam} />
         </main>
         {chatOpen && (
           <aside className="side right">

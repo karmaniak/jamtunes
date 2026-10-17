@@ -67,9 +67,11 @@ export function summariseSheet(sheet: ChordSheet): string {
 export function applyChanges(sheet: ChordSheet, c: SheetChanges): ChordSheet {
   let out = sheet;
   if (c.progression) {
+    const styleChanged = !!c.style && c.style !== out.arrangement.style;
     const { sheet: fresh } = sheetFromQuick(c.progression, undefined, {
       style: c.style ?? out.arrangement.style,
-      tempo: c.tempo ?? out.tempo,
+      // A new style with no explicit tempo takes the style's own tempo.
+      tempo: c.tempo ?? (styleChanged ? undefined : out.tempo),
       timeSignature: c.timeSignature ?? out.timeSignature,
       title: c.title ?? out.title,
     });
@@ -121,6 +123,42 @@ const TRACK_WORDS: [RegExp, TrackId][] = [
   [/\b(clean\s+)?(guitar|gtr|strum\w*)\b/i, "guitar"],
 ];
 
+const RUN_SEPARATOR = /^(\||\.+|[-–—]|\(?[x×]\d+\)?|\[[^\]]+\]|then)$/i;
+
+/** Longest run of chord-ish tokens in free text, as quick syntax. Null if fewer than two chords. */
+export function extractProgression(msg: string): string | null {
+  const tokens = msg.replace(/[,:;]/g, " ").split(/\s+/).filter(Boolean);
+  let best: string[] = [];
+  let bestChords = 0;
+  let run: string[] = [];
+  let chords = 0;
+  const flush = () => {
+    // Two bare letters ("A and B") aren't a progression; real ones have suffixes or more chords.
+    const credible = chords >= 3 || run.some((t) => looksLikeChord(t) && t.length > 1);
+    if (chords >= 2 && credible && chords > bestChords) {
+      best = run;
+      bestChords = chords;
+    }
+    run = [];
+    chords = 0;
+  };
+  for (const raw of tokens) {
+    const t = /^\.+$/.test(raw) ? raw : raw.replace(/[.!?]+$/, "");
+    if (looksLikeChord(t)) {
+      run.push(t);
+      chords++;
+    } else if (RUN_SEPARATOR.test(t) && run.length) {
+      const rep = /^\(?[x×](\d+)\)?$/i.exec(t);
+      if (rep) run.push(`x${rep[1]}`);
+      else if (t === "|" || /^\.+$/.test(t) || t.startsWith("[")) run.push(t);
+    } else {
+      flush();
+    }
+  }
+  flush();
+  return best.length ? best.join(" ") : null;
+}
+
 export function interpretLocally(message: string, sheet: ChordSheet): SheetChanges {
   const c = emptyChanges();
   const notes: string[] = [];
@@ -153,7 +191,8 @@ export function interpretLocally(message: string, sheet: ChordSheet): SheetChang
   if (/\bstraight(en)?\b/i.test(msg)) c.swing = 0;
 
   const modeWord = new RegExp(`\\b(${MODE_NAMES.join("|")}|major|minor)\\b`, "i").exec(msg);
-  const keyWord = /\b(?:in|key of|to)\s+([A-G](?:#|b)?)\s*(major|minor|maj|min|m\b|dorian|phrygian|lydian|mixolydian|aeolian|locrian|ionian)?/i.exec(msg);
+  // Tonic letters must be capitals so "in a moody …" doesn't become the key of A.
+  const keyWord = /\b(?:in|key of|to)\s+([A-G](?:#|b)?)(?=\s|$|[,.])\s*(major|minor|maj|min|m\b|dorian|phrygian|lydian|mixolydian|aeolian|locrian|ionian)?/.exec(msg);
   if (keyWord || modeWord) {
     const tonic = keyWord?.[1] ?? sheet.key.tonic;
     const raw = (keyWord?.[2] ?? modeWord?.[1] ?? sheet.key.mode).toLowerCase();
@@ -180,20 +219,20 @@ export function interpretLocally(message: string, sheet: ChordSheet): SheetChang
     const after = msg.slice(m.index + m[0].length, m.index + m[0].length + 24);
     const off = /\b(mute|no|without|remove|drop|kill|cut|less)\b\s*(the\s+)?$/i.test(before) || /^\s*(off|out)\b/i.test(after);
     const on = /\b(add|unmute|bring (back|in)|with|more|turn up)\b\s*(the\s+)?$/i.test(before) || /^\s*(on|in|back)\b/i.test(after);
+    // "distorted guitar" already matched the dist track; don't double-count it as the clean guitar.
+    if (id === "guitar" && trackChanges.some((t) => t.id === "distGuitar") && /dist|heavy|crunch|overdriv/i.test(before)) continue;
     if (off || on) trackChanges.push({ id, enabled: on && !off ? true : false, volume: null, voicing: null });
-    if (id === "guitar" && trackChanges.some((t) => t.id === "distGuitar")) trackChanges.pop();
   }
   if (trackChanges.length) {
     c.tracks = trackChanges;
     notes.push(trackChanges.map((t) => `${t.id} ${t.enabled ? "on" : "off"}`).join(", "));
   }
 
-  // A chord list in the message replaces the progression.
-  const tokens = msg.replace(/[,]/g, " ").split(/\s+/);
-  const chordTokens = tokens.filter((t) => looksLikeChord(t) || t === "|" || /^\.+$/.test(t) || /^x\d$/i.test(t) || /^\[.+\]$/.test(t));
-  const realChords = chordTokens.filter(looksLikeChord);
-  if (realChords.length >= 2 && realChords.length / tokens.filter((t) => t.length > 0).length > 0.4) {
-    c.progression = chordTokens.join(" ");
+  // A chord list anywhere in the message replaces the progression: take the
+  // longest run of chord-ish tokens ("Cmaj7 D (x4) then Cmaj7#11 – D – Em").
+  const progression = extractProgression(msg);
+  if (progression) {
+    c.progression = progression;
     notes.push("new progression");
   }
 

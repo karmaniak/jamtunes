@@ -78,7 +78,8 @@ export function ChatPanel({ jam }: { jam: Jam }) {
               send(text);
             }
           }}
-          placeholder="Describe a change… (Shift+Enter for a new line)"
+          placeholder="Describe a change…"
+          title="Enter sends · Shift+Enter for a new line"
           disabled={jam.chatBusy}
         />
         <button className="primary" type="submit" disabled={!text.trim() || jam.chatBusy}>

@@ -67,7 +67,7 @@ export const INSTRUMENTS: InstrumentDef[] = [
   { id: "drumsCR", label: "CR-8000 kit", role: "drums", source: { kind: "drummachine", name: "Roland CR-8000" }, gmProgram: 0, range: [35, 59], gain: 0.9, release: 0, attackMs: 2, velocity: [55, 127], pan: 0, reverb: 0.15 },
 ];
 
-export const DEFAULT_INSTRUMENT: Record<TrackId, string> = { piano: "piano", guitar: "guitarClean", distGuitar: "guitarDist", bass: "bass", drums: "drums" };
+export const DEFAULT_INSTRUMENT: Record<TrackId, string> = { piano: "epiano", guitar: "guitarClean", distGuitar: "guitarDist", bass: "bass", drums: "drums" };
 
 export function instrumentById(id: string): InstrumentDef {
   const found = INSTRUMENTS.find((i) => i.id === id);

@@ -68,9 +68,9 @@ export const STYLES: Style[] = [
     description: "Straight 8ths, driving pick bass, power chords.",
     defaultTempo: 120,
     swing: 0,
-    tracks: { piano: true, guitar: true, distGuitar: true, bass: true, drums: true },
+    tracks: { piano: true, guitar: false, distGuitar: false, bass: true, drums: true },
     voicings: { distGuitar: "power", guitar: "open" },
-    instruments: { piano: "piano", guitar: "guitarClean", distGuitar: "guitarDist", bass: "bassPick", drums: "drums" },
+    instruments: { piano: "epiano", guitar: "guitarClean", distGuitar: "guitarDist", bass: "bassPick", drums: "drums" },
     meters: {
       "4/4": {
         stepsPerBeat: 2,
@@ -93,9 +93,9 @@ export const STYLES: Style[] = [
     description: "Clean 8ths and 16ths, picked guitar, melodic bass.",
     defaultTempo: 104,
     swing: 0.08,
-    tracks: { piano: true, guitar: true, distGuitar: false, bass: true, drums: true },
+    tracks: { piano: true, guitar: false, distGuitar: false, bass: true, drums: true },
     voicings: { guitar: "open" },
-    instruments: { piano: "piano", guitar: "guitarClean", bass: "bass", drums: "drums" },
+    instruments: { piano: "epiano", guitar: "guitarClean", bass: "bass", drums: "drums" },
     meters: {
       "4/4": {
         stepsPerBeat: 4,
@@ -118,9 +118,9 @@ export const STYLES: Style[] = [
     description: "Slow, sustained piano with arpeggiated acoustic and a soft rim-click groove.",
     defaultTempo: 72,
     swing: 0,
-    tracks: { piano: true, guitar: true, distGuitar: false, bass: true, drums: true },
+    tracks: { piano: true, guitar: false, distGuitar: false, bass: true, drums: true },
     voicings: { piano: "open", guitar: "open" },
-    instruments: { piano: "piano", guitar: "guitarSteel", bass: "bass", drums: "drums" },
+    instruments: { piano: "epiano", guitar: "guitarSteel", bass: "bass", drums: "drums" },
     meters: {
       "4/4": {
         stepsPerBeat: 4,
@@ -150,7 +150,7 @@ export const STYLES: Style[] = [
     description: "Tight 16th-note stabs, syncopated bass, busy hats.",
     defaultTempo: 100,
     swing: 0.15,
-    tracks: { piano: true, guitar: true, distGuitar: false, bass: true, drums: true },
+    tracks: { piano: true, guitar: false, distGuitar: false, bass: true, drums: true },
     voicings: { piano: "rootless", guitar: "shell" },
     instruments: { piano: "wurli", guitar: "guitarClean", bass: "bass", drums: "drums" },
     meters: {
@@ -175,9 +175,9 @@ export const STYLES: Style[] = [
     description: "Triplet shuffle with a boogie bass line and overdriven guitar.",
     defaultTempo: 112,
     swing: 0,
-    tracks: { piano: true, guitar: true, distGuitar: true, bass: true, drums: true },
+    tracks: { piano: true, guitar: false, distGuitar: false, bass: true, drums: true },
     voicings: { distGuitar: "power", guitar: "open" },
-    instruments: { piano: "piano", guitar: "guitarClean", distGuitar: "guitarOverdrive", bass: "bassPick", drums: "drums" },
+    instruments: { piano: "epiano", guitar: "guitarClean", distGuitar: "guitarOverdrive", bass: "bassPick", drums: "drums" },
     meters: {
       "4/4": {
         stepsPerBeat: 3,
@@ -199,9 +199,9 @@ export const STYLES: Style[] = [
     description: "Walking upright bass, ride cymbal, sparse comping.",
     defaultTempo: 140,
     swing: 0,
-    tracks: { piano: true, guitar: true, distGuitar: false, bass: true, drums: true },
+    tracks: { piano: true, guitar: false, distGuitar: false, bass: true, drums: true },
     voicings: { piano: "rootless", guitar: "shell" },
-    instruments: { piano: "piano", guitar: "guitarJazz", bass: "bassUpright", drums: "drums" },
+    instruments: { piano: "epiano", guitar: "guitarJazz", bass: "bassUpright", drums: "drums" },
     meters: {
       "4/4": {
         stepsPerBeat: 3,
@@ -232,9 +232,9 @@ export const STYLES: Style[] = [
     description: "Syncopated nylon guitar, rim-click clave, 1-and-5 upright bass.",
     defaultTempo: 126,
     swing: 0,
-    tracks: { piano: true, guitar: true, distGuitar: false, bass: true, drums: true },
+    tracks: { piano: true, guitar: false, distGuitar: false, bass: true, drums: true },
     voicings: { piano: "rootless", guitar: "close" },
-    instruments: { piano: "piano", guitar: "guitarNylon", bass: "bassUpright", drums: "drumsCR" },
+    instruments: { piano: "epiano", guitar: "guitarNylon", bass: "bassUpright", drums: "drumsCR" },
     meters: {
       "4/4": {
         stepsPerBeat: 4,

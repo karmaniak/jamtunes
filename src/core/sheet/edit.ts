@@ -181,6 +181,18 @@ export function moveSection(sheet: ChordSheet, sectionId: string, direction: -1 
   return out;
 }
 
+/** Move a section to an absolute position (drag & drop in the structure view). */
+export function reorderSection(sheet: ChordSheet, sectionId: string, targetIndex: number): ChordSheet {
+  const out = cloneSheet(sheet);
+  const from = out.sections.findIndex((s) => s.id === sectionId);
+  if (from < 0) return sheet;
+  const to = Math.max(0, Math.min(out.sections.length - 1, targetIndex));
+  if (to === from) return sheet;
+  const [moved] = out.sections.splice(from, 1);
+  out.sections.splice(to, 0, moved);
+  return out;
+}
+
 export function duplicateSection(sheet: ChordSheet, sectionId: string): ChordSheet {
   const out = cloneSheet(sheet);
   const i = out.sections.findIndex((s) => s.id === sectionId);

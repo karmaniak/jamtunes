@@ -32,7 +32,9 @@ describe("arranger", () => {
   it("produces events for every enabled track within instrument range", () => {
     const t = buildTimeline(sheet);
     expect(t.loopEnd - t.loopStart).toBe(16);
-    for (const track of ["piano", "guitar", "distGuitar", "bass", "drums"] as const) {
+    const enabled = (["piano", "guitar", "distGuitar", "bass", "drums"] as const).filter((id) => sheet.arrangement.tracks[id].enabled);
+    expect(enabled).toEqual(["piano", "bass", "drums"]); // default band is a trio; guitars are opt-in
+    for (const track of enabled) {
       const evs = t.events.filter((e) => e.track === track);
       expect(evs.length, track).toBeGreaterThan(0);
       if (track === "drums") continue;
@@ -89,7 +91,7 @@ describe("midi writer", () => {
     expect(String.fromCharCode(...bytes.slice(0, 4))).toBe("MThd");
     expect(bytes[9]).toBe(1); // format 1
     const nTracks = (bytes[10] << 8) | bytes[11];
-    expect(nTracks).toBe(6); // conductor + 5 instruments
+    expect(nTracks).toBe(4); // conductor + the default trio (piano, bass, drums)
     expect(String.fromCharCode(...bytes.slice(14, 18))).toBe("MTrk");
   });
 });

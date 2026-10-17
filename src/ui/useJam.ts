@@ -4,7 +4,7 @@
  * playback in sync (re-arranges live from the current bar).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { buildTimeline, type Timeline } from "@core/arrange/arranger";
+import { buildTimeline, type SlotMarker, type Timeline } from "@core/arrange/arranger";
 import { applyChanges, interpretLocally, summariseSheet, type SheetChanges } from "@core/chat/intent";
 import { instrumentFor } from "@core/instruments";
 import { timelineToMidi } from "@core/midi/writer";
@@ -47,6 +47,8 @@ export function useJam() {
   const [engineState, setEngineState] = useState<EngineState>("idle");
   const [loadLabel, setLoadLabel] = useState("");
   const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
+  const [activeMarker, setActiveMarker] = useState<SlotMarker | null>(null);
+  const [focusSectionId, setFocusSectionId] = useState<string | null>(null);
   const [countInActive, setCountInActive] = useState(false);
   const [loop, setLoop] = useState(true);
   const [chat, setChat] = useState<ChatMessage[]>([]);
@@ -82,6 +84,7 @@ export function useJam() {
         if (id !== lastSlot) {
           lastSlot = id;
           setActiveSlotId(id);
+          setActiveMarker(marker ?? null);
         }
       };
       engineRef.current = e;
@@ -152,6 +155,7 @@ export function useJam() {
   const stop = useCallback(() => {
     engineRef.current?.stop();
     setActiveSlotId(null);
+    setActiveMarker(null);
     setCountInActive(false);
   }, []);
 
@@ -268,6 +272,9 @@ export function useJam() {
     engineState,
     loadLabel,
     activeSlotId,
+    activeMarker,
+    focusSectionId,
+    focusSection: setFocusSectionId,
     countInActive,
     loop,
     setLoop,

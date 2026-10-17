@@ -8,7 +8,8 @@
  * names, rhythm glyphs, roman numerals, lyrics…) means adding a renderer
  * here, not changing the data model.
  */
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { sectionColor } from "./ArrangementView";
 import { parseChord } from "@core/theory/chords";
 import { noteToPc } from "@core/theory/notes";
 import { degreeOf, diatonicChords } from "@core/theory/scales";
@@ -140,6 +141,7 @@ export function SheetView({ jam }: { jam: Jam }) {
           key={section.id}
           jam={jam}
           section={section}
+          index={sIdx}
           isFirst={sIdx === 0}
           isLast={sIdx === sheet.sections.length - 1}
           activeSlotId={activeSlotId}
@@ -159,6 +161,7 @@ export function SheetView({ jam }: { jam: Jam }) {
 function SectionView({
   jam,
   section,
+  index,
   isFirst,
   isLast,
   activeSlotId,
@@ -166,6 +169,7 @@ function SectionView({
 }: {
   jam: Jam;
   section: Section;
+  index: number;
   isFirst: boolean;
   isLast: boolean;
   activeSlotId: string | null;
@@ -174,9 +178,17 @@ function SectionView({
   const { sheet, commit } = jam;
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(section.name);
+  const ref = useRef<HTMLElement>(null);
+  const focused = jam.focusSectionId === section.id;
+  const color = sectionColor(index);
+
+  // Jumping here from the structure strip scrolls the section into view.
+  useEffect(() => {
+    if (focused) ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focused]);
 
   return (
-    <section className="section">
+    <section ref={ref} className={`section ${focused ? "focused" : ""}`} style={{ ["--section-color" as string]: color }} onMouseDown={() => jam.focusSection(section.id)}>
       <div className="section-head">
         {renaming ? (
           <input
