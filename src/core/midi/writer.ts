@@ -4,7 +4,7 @@
  * "Export .mid" button so the jam can be dropped into any DAW.
  */
 import type { NoteEvent, Timeline } from "../arrange/arranger";
-import { instrumentById } from "../instruments";
+import { instrumentFor } from "../instruments";
 import type { Arrangement, TrackId } from "../sheet/model";
 
 const PPQ = 480;
@@ -48,7 +48,7 @@ export function timelineToMidi(timeline: Timeline, arrangement: Arrangement, opt
   for (const [track, events] of byTrack) {
     const ch = CHANNEL[track];
     const raw: { tick: number; order: number; bytes: number[] }[] = [];
-    const program = instrumentById(arrangement.tracks[track].instrument).gmProgram;
+    const program = instrumentFor(track, arrangement.tracks[track].instrument).gmProgram;
     const nameBytes = strBytes(TRACK_NAME[track]);
     for (let loop = 0; loop < loops; loop++) {
       for (const e of events) {
@@ -56,7 +56,8 @@ export function timelineToMidi(timeline: Timeline, arrangement: Arrangement, opt
         if (isCountIn && loop > 0) continue;
         const start = e.start - offset + (isCountIn ? 0 : loop * bodyLen);
         const on = Math.round(start * ticksPerBeat);
-        const off = Math.max(on + 1, Math.round((start + e.duration) * ticksPerBeat));
+        const length = e.duration > 0 ? e.duration : 0.25; // drums ring in the engine; give them a short note in the file
+        const off = Math.max(on + 1, Math.round((start + length) * ticksPerBeat));
         raw.push({ tick: on, order: 1, bytes: [0x90 | ch, e.midi, e.velocity] });
         raw.push({ tick: off, order: 0, bytes: [0x80 | ch, e.midi, 0] });
       }

@@ -16,11 +16,33 @@ the chord sheet is the instrument.
 
 ```bash
 npm install
-cp .env.example .env          # optional: add ANTHROPIC_API_KEY for free-form chat
 npm run dev                   # web on :5173, api on :8787
 ```
 
-Samples (General MIDI soundfonts + a TR-808 kit) stream from public CDNs on first play and are cached by the browser.
+### Connect the chat to your Claude
+
+The chat works offline for tempo / style / key / mode / track / chord-list requests. For free-form requests it talks to Claude, using whatever credential the Anthropic SDK finds — no key needs to be pasted into the app:
+
+```bash
+brew install anthropics/tap/ant     # Anthropic CLI (or: go install github.com/anthropics/anthropic-cli/cmd/ant@latest)
+ant auth login                      # opens the browser; stores an OAuth profile under ~/.config/anthropic
+npm run dev                         # the server reports "chat: Claude via profile"
+```
+
+Alternatively put `ANTHROPIC_API_KEY=...` in `.env`. The chat header shows **Claude** when connected and **offline** otherwise.
+
+### Sounds
+
+A web page can't host native VST plugins, so JamTunes streams the best freely-hosted sample libraries that load in a browser (cached after first play):
+
+| Role    | Source                                                       |
+| ------- | ------------------------------------------------------------ |
+| Piano   | Splendid Grand Piano (multi-velocity Steinway), CP80 / Wurlitzer (Greg Sullivan) |
+| Guitars | MusyngKite GM bank: clean, jazz, steel, nylon, overdrive, distortion |
+| Bass    | MusyngKite finger / pick; Smolken sampled double bass (pizzicato) |
+| Drums   | LinnDrum LM-2 (default), TR-808, CR-8000                      |
+
+Performance finesse lives in the arranger and engine, not in user controls: legato overlaps and release tails, down/up strum direction, beat accents, bass slightly ahead and snare slightly behind the grid, 2-bar drum phrases, fills only into new sections, per-instrument velocity ranges, a reverb send and bus compression.
 
 ```bash
 npm test          # unit tests for theory, parsers, arranger, MIDI writer
@@ -33,7 +55,7 @@ npm start         # serve dist/ + api from one process
 ```
 src/core/                 pure TypeScript, no DOM, fully unit-tested
   theory/   notes, chord-symbol parser, modes/diatonic chords, key detection
-  sheet/    ChordSheet model (the source of truth) + pure transforms
+  sheet/    ChordSheet model (the source of truth), pure transforms, structural edits
   parse/    quick syntax, UG-style text, sheet builders
   arrange/  voicing engine, rhythm-pattern DSL, style presets, arranger → Timeline
   midi/     Standard MIDI File writer

@@ -8,7 +8,7 @@ import { parseChord, respellChord } from "../theory/chords";
 import { mod12, noteToPc, pcToName, preferredAccidental } from "../theory/notes";
 import { mapChordToMode, MODE_NAMES, type ModeName } from "../theory/scales";
 import { styleById } from "../arrange/styles";
-import { instrumentById } from "../instruments";
+import { DEFAULT_INSTRUMENT } from "../instruments";
 import { cloneSheet, TRACK_IDS, type ChordSheet, type ChordSlot, type TrackId, type TrackSettings } from "./model";
 
 export type SheetTransform = (sheet: ChordSheet) => ChordSheet;
@@ -70,22 +70,11 @@ export function setStyle(sheet: ChordSheet, styleId: string, opts: { keepTempo?:
   for (const id of TRACK_IDS) {
     const t = out.arrangement.tracks[id];
     if (style.tracks[id] !== undefined) t.enabled = style.tracks[id] as boolean;
-    const preferred = style.instruments?.[id];
-    if (preferred) t.instrument = preferred;
-    else t.instrument = defaultInstrumentFor(id, t.instrument);
+    t.instrument = style.instruments?.[id] ?? DEFAULT_INSTRUMENT[id];
     t.voicing = undefined; // fall back to the style's voicing preference
     t.pattern = undefined;
   }
   return out;
-}
-
-function defaultInstrumentFor(id: TrackId, current: string): string {
-  const defaults: Record<TrackId, string> = { piano: "piano", guitar: "guitarClean", distGuitar: "guitarDist", bass: "bass", drums: "drums" };
-  try {
-    return instrumentById(current).role === id ? defaults[id] : defaults[id];
-  } catch {
-    return defaults[id];
-  }
 }
 
 export function updateTrack(sheet: ChordSheet, id: TrackId, patch: Partial<TrackSettings>): ChordSheet {

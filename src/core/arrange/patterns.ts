@@ -68,10 +68,19 @@ export const VELOCITY: Record<string, number> = {
   "9": 84,
 };
 
-/** Fit a pattern string to a bar of `steps` steps by tiling or truncating. */
-export function fitPattern(steps: string, totalSteps: number): string {
+/**
+ * Fit a pattern string to a bar of `totalSteps` steps. Shorter strings tile;
+ * a string that is N whole bars long is a multi-bar phrase and `barIndex`
+ * selects the bar (so 2-bar grooves breathe instead of looping one bar).
+ */
+export function fitPattern(steps: string, totalSteps: number, barIndex = 0): string {
   const clean = steps.replace(/\s+/g, "");
   if (clean.length === 0) return ".".repeat(totalSteps);
+  if (clean.length > totalSteps && clean.length % totalSteps === 0) {
+    const bars = clean.length / totalSteps;
+    const i = barIndex % bars;
+    return clean.slice(i * totalSteps, (i + 1) * totalSteps);
+  }
   let out = "";
   while (out.length < totalSteps) out += clean;
   return out.slice(0, totalSteps);

@@ -37,9 +37,14 @@ Progressions use quick syntax, one bar per chord unless bars are written with |:
 Write a full progression (all sections) whenever you set it. Prefer real musical choices: for a vibe request with no chords given, pick an idiomatic progression in a fitting key, set style and tempo, and explain briefly in reply.
 If the user names a song, do not reproduce copyrighted lyrics; a chord progression and section layout is fine.`;
 
-export async function runChat(req: ChatRequest, apiKey: string | undefined): Promise<{ changes: SheetChanges; source: "claude" | "local"; model?: string }> {
-  if (!apiKey) throw new Error("no api key");
-  const client = new Anthropic({ apiKey });
+/**
+ * Credentials resolve the way the SDK does: ANTHROPIC_API_KEY, then
+ * ANTHROPIC_AUTH_TOKEN, then the OAuth profile stored by `ant auth login`
+ * (the user's own Claude login — no key to paste). A bare client picks up
+ * whichever is present.
+ */
+export async function runChat(req: ChatRequest): Promise<{ changes: SheetChanges; source: "claude" | "local"; model?: string }> {
+  const client = new Anthropic();
   const messages: Anthropic.Beta.BetaMessageParam[] = [
     ...req.history.slice(-8).map((h) => ({ role: h.role, content: h.content }) as Anthropic.Beta.BetaMessageParam),
     { role: "user", content: `Current sheet:\n${req.sheetSummary}\n\nRequest: ${req.message}` },

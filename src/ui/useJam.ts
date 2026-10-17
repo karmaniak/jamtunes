@@ -6,9 +6,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildTimeline, type Timeline } from "@core/arrange/arranger";
 import { applyChanges, interpretLocally, summariseSheet, type SheetChanges } from "@core/chat/intent";
+import { instrumentFor } from "@core/instruments";
 import { timelineToMidi } from "@core/midi/writer";
 import { sheetFromQuick, sheetFromText } from "@core/parse/build";
-import type { ChordSheet } from "@core/sheet/model";
+import { TRACK_IDS, type ChordSheet } from "@core/sheet/model";
 import { JamEngine, type EngineState } from "@audio/engine";
 
 export interface ChatMessage {
@@ -16,6 +17,12 @@ export interface ChatMessage {
   role: "user" | "assistant";
   text: string;
   source?: "claude" | "local";
+  error?: boolean;
+}
+
+export interface ChatStatus {
+  mode: "unknown" | "claude" | "local";
+  credential?: string;
 }
 
 const STORAGE_KEY = "jamtunes.sheet.v1";
@@ -24,7 +31,11 @@ const DEMO = "[Verse]\n| Am F | C G |\n| Am F | C G |\n[Chorus]\nF G C Am\nF . G
 function loadStored(): ChordSheet | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as ChordSheet) : null;
+    if (!raw) return null;
+    const sheet = JSON.parse(raw) as ChordSheet;
+    // Instrument ids change between versions; fall back to the role default.
+    for (const id of TRACK_IDS) sheet.arrangement.tracks[id].instrument = instrumentFor(id, sheet.arrangement.tracks[id].instrument).id;
+    return sheet;
   } catch {
     return null;
   }
@@ -40,6 +51,7 @@ export function useJam() {
   const [loop, setLoop] = useState(true);
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [chatBusy, setChatBusy] = useState(false);
+  const [chatStatus, setChatStatus] = useState<ChatStatus>({ mode: "unknown" });
   const [notice, setNotice] = useState<string | null>(null);
 
   const engineRef = useRef<JamEngine | null>(null);
@@ -87,11 +99,27 @@ export function useJam() {
 
   useEffect(() => () => engineRef.current?.dispose(), []);
 
+  // Ask the server how chat is connected (API key, `ant auth login` profile, or nothing).
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/health")
+      .then((r) => r.json())
+      .then((d: { chat?: "claude" | "local"; credential?: string }) => {
+        if (!cancelled) setChatStatus({ mode: d.chat ?? "local", credential: d.credential });
+      })
+      .catch(() => {
+        if (!cancelled) setChatStatus({ mode: "local" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   /** Replace the sheet; if playing, keep playing from the same bar with the new arrangement. */
   const commit = useCallback((next: ChordSheet, opts: { undoable?: boolean } = {}) => {
     const prev = sheetRef.current;
     if (next === prev) return;
-    if (opts.undoable !== false) setUndo((u) => [...u.slice(-29), prev]);
+    if (opts.undoable !== false) setUndo((u) => [...u.slice(-49), prev]);
     setSheetState(next);
     const e = engineRef.current;
     if (e && e.isPlaying) {
@@ -187,6 +215,7 @@ export function useJam() {
       setChatBusy(true);
       let changes: SheetChanges | null = null;
       let source: "claude" | "local" = "local";
+      let serverError: string | null = null;
       try {
         const history = chat.slice(-8).map((m) => ({ role: m.role, content: m.text }));
         const res = await fetch("/api/chat", {
@@ -198,18 +227,23 @@ export function useJam() {
         if (res.ok && data.changes) {
           changes = data.changes;
           source = data.source ?? "claude";
+        } else if (data.error) {
+          serverError = data.error;
         }
       } catch {
-        /* offline: fall through to local */
+        serverError = "The API server isn't reachable (is `npm run dev` running?).";
       }
       if (!changes) changes = interpretLocally(message, current);
+      // Apply to the *latest* sheet: the user may have edited while we waited.
+      const latest = sheetRef.current;
       try {
-        const next = applyChanges(current, changes);
-        if (next !== current) commit(next);
+        const next = applyChanges(latest, changes);
+        if (next !== latest) commit(next);
       } catch (err) {
         changes.reply += ` (Couldn't apply everything: ${err instanceof Error ? err.message : String(err)})`;
       }
-      setChat((c) => [...c, { id: id + 1, role: "assistant", text: changes!.reply, source }]);
+      const reply = serverError ? `${changes.reply}\n\n⚠ ${serverError}` : changes.reply;
+      setChat((c) => [...c, { id: id + 1, role: "assistant", text: reply, source, error: !!serverError }]);
       setChatBusy(false);
     },
     [chat, commit],
@@ -245,6 +279,7 @@ export function useJam() {
     loadUrl,
     chat,
     chatBusy,
+    chatStatus,
     sendChat,
     exportMidi,
     notice,
