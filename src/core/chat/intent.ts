@@ -40,6 +40,7 @@ export const SheetChangesSchema = z.object({
         enabled: z.boolean().nullable(),
         volume: z.number().nullable().describe("0..1"),
         voicing: z.enum(["auto", "close", "open", "shell", "power", "rootless"]).nullable(),
+        complexity: z.number().nullable().describe("0 = simple/sparse, 0.5 = as written, 1 = busy/involved. Null to keep."),
       }),
     )
     .nullable(),
@@ -97,6 +98,7 @@ export function applyChanges(sheet: ChordSheet, c: SheetChanges): ChordSheet {
       if (t.enabled !== null) patch.enabled = t.enabled;
       if (t.volume !== null) patch.volume = Math.max(0, Math.min(1, t.volume));
       if (t.voicing !== null) patch.voicing = t.voicing;
+      if (t.complexity !== null && t.complexity !== undefined) patch.complexity = Math.max(0, Math.min(1, t.complexity));
       out = updateTrack(out, t.id, patch);
     }
   }
@@ -212,6 +214,9 @@ export function interpretLocally(message: string, sheet: ChordSheet): SheetChang
   }
 
   const trackChanges: NonNullable<SheetChanges["tracks"]> = [];
+  const busier = /\b(busier|busy|more (complex|involved|active|detail\w*)|complex|elaborate|fancier|more fills?)\b/i.test(msg);
+  const simpler = /\b(simpler|simple|sparser?|less busy|strip\w* (it )?(back|down)|minimal|bare|fewer fills?|calm\w* down)\b/i.test(msg);
+  const mentioned: TrackId[] = [];
   for (const [re, id] of TRACK_WORDS) {
     const m = re.exec(msg);
     if (!m) continue;
@@ -220,12 +225,27 @@ export function interpretLocally(message: string, sheet: ChordSheet): SheetChang
     const off = /\b(mute|no|without|remove|drop|kill|cut|less)\b\s*(the\s+)?$/i.test(before) || /^\s*(off|out)\b/i.test(after);
     const on = /\b(add|unmute|bring (back|in)|with|more|turn up)\b\s*(the\s+)?$/i.test(before) || /^\s*(on|in|back)\b/i.test(after);
     // "distorted guitar" already matched the dist track; don't double-count it as the clean guitar.
-    if (id === "guitar" && trackChanges.some((t) => t.id === "distGuitar") && /dist|heavy|crunch|overdriv/i.test(before)) continue;
-    if (off || on) trackChanges.push({ id, enabled: on && !off ? true : false, volume: null, voicing: null });
+    if (id === "guitar" && mentioned.includes("distGuitar") && /dist|heavy|crunch|overdriv/i.test(before)) continue;
+    mentioned.push(id);
+    if (off || on) trackChanges.push({ id, enabled: on && !off ? true : false, volume: null, voicing: null, complexity: null });
+  }
+  if (busier !== simpler) {
+    // "busier drums" targets the named tracks; "make it busier" nudges the whole band.
+    const targets = mentioned.filter((id) => !trackChanges.some((t) => t.id === id && t.enabled === false));
+    const ids = targets.length ? targets : TRACK_IDS.filter((id) => sheet.arrangement.tracks[id].enabled);
+    for (const id of ids) {
+      const current = sheet.arrangement.tracks[id].complexity ?? 0.5;
+      const next = Math.max(0, Math.min(1, current + (busier ? 0.25 : -0.25)));
+      const existing = trackChanges.find((t) => t.id === id);
+      if (existing) existing.complexity = next;
+      else trackChanges.push({ id, enabled: null, volume: null, voicing: null, complexity: next });
+    }
+    notes.push(busier ? "busier" : "simpler");
   }
   if (trackChanges.length) {
     c.tracks = trackChanges;
-    notes.push(trackChanges.map((t) => `${t.id} ${t.enabled ? "on" : "off"}`).join(", "));
+    const toggles = trackChanges.filter((t) => t.enabled !== null).map((t) => `${t.id} ${t.enabled ? "on" : "off"}`);
+    if (toggles.length) notes.push(toggles.join(", "));
   }
 
   // A chord list anywhere in the message replaces the progression: take the

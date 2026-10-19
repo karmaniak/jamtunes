@@ -18,6 +18,7 @@ import { hashString, seededRandom } from "../util/random";
 import { bassNote, chordTone, voiceChord } from "./voicing";
 import { countInPattern, fitPattern, isSustaining, parseHits, swingOffset, VELOCITY, type CompTrack, type MeterPatterns } from "./patterns";
 import { patternsFor, styleById, type Style } from "./styles";
+import { fillBeats, fillEvery, shapeBass, shapeComping, shapeDrums } from "./complexity";
 
 export interface NoteEvent {
   track: TrackId;
@@ -135,7 +136,8 @@ export function buildTimeline(sheet: ChordSheet): Timeline {
       const settings = arrangement.tracks[track];
       if (!settings.enabled) continue;
       const pat = pats[track];
-      const steps = fitPattern(settings.pattern ?? pat.steps, totalSteps, phraseBar);
+      const shapeCtx = { rng: seededRandom(hashString(`${sheet.id}:${track}:${i}`)), stepsPerBeat: spb, beatsPerBar };
+      const steps = shapeComping(fitPattern(settings.pattern ?? pat.steps, totalSteps, phraseBar), complexityFor(settings.complexity, inst), shapeCtx);
       const gate = pat.gate ?? 1;
       const instrument = instrumentFor(track, settings.instrument);
       const hint: VoicingHint = settings.voicing ?? style.voicings?.[track] ?? "auto";
@@ -185,7 +187,14 @@ export function buildTimeline(sheet: ChordSheet): Timeline {
     if (arrangement.tracks.bass.enabled) {
       const settings = arrangement.tracks.bass;
       const instrument = instrumentFor("bass", settings.instrument);
-      const steps = fitPattern(settings.pattern ?? pats.bass.steps, totalSteps, phraseBar);
+      const lastChordHere = slotRanges[slotRanges.length - 1]?.chord ?? null;
+      const changesNext = !!nextRoot && (!lastChordHere || nextRoot.rootPc !== lastChordHere.rootPc || nextRoot.bassPc !== lastChordHere.bassPc);
+      const steps = shapeBass(
+        fitPattern(settings.pattern ?? pats.bass.steps, totalSteps, phraseBar),
+        complexityFor(settings.complexity, inst),
+        { rng: seededRandom(hashString(`${sheet.id}:bass:${i}`)), stepsPerBeat: spb, beatsPerBar },
+        changesNext,
+      );
       const gate = pats.bass.gate ?? 1;
       const early = secToBeats(0.005); // bass sits a hair ahead of the kick
       slotRanges.forEach((range, ri) => {
@@ -218,7 +227,10 @@ export function buildTimeline(sheet: ChordSheet): Timeline {
     // Drums
     if (arrangement.tracks.drums.enabled) {
       const late = secToBeats(0.007); // laid-back snare
-      for (const [name, steps] of drumPatternsFor(pats, totalSteps, phraseBar)) {
+      const drumC = complexityFor(arrangement.tracks.drums.complexity, inst);
+      const fitted = Object.fromEntries(drumPatternsFor(pats, totalSteps, phraseBar)) as Partial<Record<DrumName, string>>;
+      const shaped = shapeDrums(fitted, drumC, { rng: seededRandom(hashString(`${sheet.id}:drums:${i}`)), stepsPerBeat: spb, beatsPerBar }, phraseBar);
+      for (const [name, steps] of Object.entries(shaped) as [DrumName, string][]) {
         for (const hit of parseHits(steps)) {
           const offBeat = hit.step % spb !== 0;
           const isHat = name === "hhClosed" || name === "hhPedal" || name === "ride" || name === "shaker";
@@ -230,8 +242,11 @@ export function buildTimeline(sheet: ChordSheet): Timeline {
       if (inst.isSectionStart && inst.sectionPass === 0) {
         events.push({ track: "drums", midi: GM_DRUMS.crash, velocity: 96, start: inst.startBeat, duration: 0 });
       }
-      if (nextIsNewSection && inst.section.bars.length > 1) {
-        addFill(events, inst.startBeat + beatsPerBar - 1, spb >= 3 ? 3 : 4, rand, dynamics);
+      const every = fillEvery(drumC);
+      const periodic = every > 0 && (phraseBar + 1) % every === 0 && !inst.isSectionEnd;
+      if ((nextIsNewSection && inst.section.bars.length > 1) || periodic) {
+        const beats = nextIsNewSection ? fillBeats(drumC) : 1;
+        addFill(events, inst.startBeat + beatsPerBar - beats, beats, spb >= 3 ? 3 : 4, rand, dynamics + (periodic ? -8 : 0));
       }
     }
   });
@@ -338,13 +353,24 @@ function drumPatternsFor(pats: MeterPatterns, totalSteps: number, phraseBar: num
     .map(([name, steps]) => [name, fitPattern(steps, totalSteps, phraseBar)]);
 }
 
-/** Short snare/tom build over the last beat, leading into a new section. */
-function addFill(events: NoteEvent[], startBeat: number, subdivisions: number, rand: () => number, dynamics: number) {
+/** Snare/tom build over the last `lengthBeats` beats, leading into a new section (or a periodic fill). */
+function addFill(events: NoteEvent[], startBeat: number, lengthBeats: number, perBeat: number, rand: () => number, dynamics: number) {
   const toms: number[] = [GM_DRUMS.snare, GM_DRUMS.tomHigh, GM_DRUMS.tomMid, GM_DRUMS.tomLow];
-  for (let i = 0; i < subdivisions; i++) {
-    const midi = i === 0 ? GM_DRUMS.snare : toms[Math.min(toms.length - 1, 1 + Math.floor(rand() * 3))];
-    events.push({ track: "drums", midi, velocity: clampVel(78 + i * 9 + dynamics), start: startBeat + i / subdivisions, duration: 0 });
+  const n = Math.round(lengthBeats * perBeat);
+  for (let i = 0; i < n; i++) {
+    // Start on the snare, wander down the toms, land the last hit on the floor tom.
+    const midi = i === 0 ? GM_DRUMS.snare : i === n - 1 ? GM_DRUMS.tomLow : rand() < 0.35 ? GM_DRUMS.snare : toms[1 + Math.min(2, Math.floor((i / n) * 3))];
+    const skip = n > 4 && i > 0 && i < n - 1 && rand() < 0.2; // breathe: not every subdivision
+    if (skip) continue;
+    events.push({ track: "drums", midi, velocity: clampVel(74 + (i / n) * 30 + dynamics), start: startBeat + i / perBeat, duration: 0 });
   }
+}
+
+/** Effective complexity for a bar: the slider, nudged up on later passes and in choruses. */
+function complexityFor(setting: number | undefined, inst: BarInstance): number {
+  const base = setting ?? 0.5;
+  const lift = (inst.sectionPass > 0 ? 0.08 : 0) + (/chorus|hook|drop/i.test(inst.section.name) ? 0.08 : 0);
+  return Math.max(0, Math.min(1, base + lift));
 }
 
 function clampVel(v: number): number {

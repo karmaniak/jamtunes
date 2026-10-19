@@ -16,7 +16,7 @@ import { TRACK_IDS, type Arrangement, type TrackId } from "@core/sheet/model";
 export type EngineState = "idle" | "loading" | "ready" | "playing";
 
 interface Player {
-  start: (e: { note: string | number; velocity?: number; time?: number; duration?: number; ampRelease?: number }) => unknown;
+  start: (e: { note: string | number; velocity?: number; time?: number; duration?: number; ampRelease?: number; lpfCutoffHz?: number; detune?: number }) => unknown;
   stop: () => void;
 }
 
@@ -94,7 +94,46 @@ export class JamEngine {
       const send = ctx.createGain();
       send.gain.value = 0;
       let last: AudioNode = input;
-      if (id === "distGuitar") {
+      if (id === "drums") {
+        // Drum bus: a little weight and air, then parallel ("New York") compression for punch.
+        const low = ctx.createBiquadFilter();
+        low.type = "lowshelf";
+        low.frequency.value = 90;
+        low.gain.value = 3;
+        const high = ctx.createBiquadFilter();
+        high.type = "highshelf";
+        high.frequency.value = 7000;
+        high.gain.value = 2;
+        const sum = ctx.createGain();
+        const dry = ctx.createGain();
+        dry.gain.value = 0.8;
+        const squash = ctx.createDynamicsCompressor();
+        squash.threshold.value = -28;
+        squash.knee.value = 6;
+        squash.ratio.value = 8;
+        squash.attack.value = 0.003;
+        squash.release.value = 0.12;
+        const wet = ctx.createGain();
+        wet.gain.value = 0.55;
+        input.connect(low);
+        low.connect(high);
+        high.connect(dry);
+        high.connect(squash);
+        squash.connect(wet);
+        dry.connect(sum);
+        wet.connect(sum);
+        last = sum;
+      } else if (id === "bass") {
+        // Even out the bass so every note sits at the same weight.
+        const comp = ctx.createDynamicsCompressor();
+        comp.threshold.value = -20;
+        comp.knee.value = 8;
+        comp.ratio.value = 4;
+        comp.attack.value = 0.01;
+        comp.release.value = 0.15;
+        input.connect(comp);
+        last = comp;
+      } else if (id === "distGuitar") {
         // Glue the single-note distortion samples into a wall: soft clip + roll off fizz.
         const shaper = ctx.createWaveShaper();
         shaper.curve = softClipCurve(2.2);
@@ -317,15 +356,20 @@ export class JamEngine {
     const inst = this.loaded.get(def.id);
     if (!inst) return;
     const [vLo, vHi] = def.velocity;
-    const velocity = Math.round(vLo + (e.velocity / 127) * (vHi - vLo));
+    const norm = e.velocity / 127;
+    const velocity = Math.round(vLo + norm * (vHi - vLo));
     const time = Math.max(this.ctx.currentTime, when - def.attackMs / 1000);
+    // Dynamics that single-layer samples don't have: soft hits are darker, and no two hits are identical.
+    const brightness = 0.22 + 0.78 * Math.pow(norm, 1.4);
+    const lpfCutoffHz = (inst.drumMap ? 16000 : def.role === "bass" ? 7000 : 11000) * brightness;
+    const detune = (Math.random() - 0.5) * (inst.drumMap ? 10 : def.role === "piano" ? 0 : 5);
     if (inst.drumMap) {
       const sample = inst.drumMap.get(e.midi);
       if (!sample) return;
-      inst.player.start({ note: sample, velocity, time });
+      inst.player.start({ note: sample, velocity, time, lpfCutoffHz, detune });
     } else {
       const duration = Math.max(0.06, e.duration * spb);
-      inst.player.start({ note: e.midi, velocity, time, duration, ampRelease: def.release });
+      inst.player.start({ note: e.midi, velocity, time, duration, ampRelease: def.release, lpfCutoffHz, detune });
     }
   }
 

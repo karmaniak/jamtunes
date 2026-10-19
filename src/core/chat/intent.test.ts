@@ -28,9 +28,16 @@ describe("offline interpreter", () => {
   it("toggles tracks", () => {
     const c = interpretLocally("mute the piano and add distorted guitar", base);
     expect(c.tracks).toEqual([
-      { id: "piano", enabled: false, volume: null, voicing: null },
-      { id: "distGuitar", enabled: true, volume: null, voicing: null },
+      { id: "piano", enabled: false, volume: null, voicing: null, complexity: null },
+      { id: "distGuitar", enabled: true, volume: null, voicing: null, complexity: null },
     ]);
+  });
+
+  it("nudges complexity with busier / simpler", () => {
+    expect(interpretLocally("busier drums please", base).tracks).toEqual([{ id: "drums", enabled: null, volume: null, voicing: null, complexity: 0.75 }]);
+    const all = interpretLocally("make it simpler", base).tracks!;
+    expect(all.map((t) => t.id)).toEqual(["piano", "bass", "drums"]);
+    expect(all[0].complexity).toBe(0.25);
   });
 });
 

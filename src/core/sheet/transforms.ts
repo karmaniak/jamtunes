@@ -9,7 +9,7 @@ import { mod12, noteToPc, pcToName, preferredAccidental } from "../theory/notes"
 import { mapChordToMode, MODE_NAMES, type ModeName } from "../theory/scales";
 import { styleById } from "../arrange/styles";
 import { DEFAULT_INSTRUMENT } from "../instruments";
-import { cloneSheet, TRACK_IDS, type ChordSheet, type ChordSlot, type TrackId, type TrackSettings } from "./model";
+import { cloneSheet, TRACK_IDS, type ChordSheet, type ChordSlot, type TimeSignature, type TrackId, type TrackSettings } from "./model";
 
 export type SheetTransform = (sheet: ChordSheet) => ChordSheet;
 
@@ -86,6 +86,20 @@ export function updateTrack(sheet: ChordSheet, id: TrackId, patch: Partial<Track
 export function setTempo(sheet: ChordSheet, tempo: number): ChordSheet {
   const out = cloneSheet(sheet);
   out.tempo = Math.max(30, Math.min(300, Math.round(tempo)));
+  return out;
+}
+
+/**
+ * Change meter. Each bar keeps its identity: slots are scaled so a chord that
+ * filled a bar of 4/4 fills a bar of 3/4 or 6/8 (and half-bar chords stay half-bar).
+ */
+export function setTimeSignature(sheet: ChordSheet, ts: TimeSignature): ChordSheet {
+  const from = sheet.timeSignature;
+  if (from.beats === ts.beats && from.unit === ts.unit) return sheet;
+  const factor = ts.beats / from.beats;
+  const out = mapSlots(sheet, (slot) => ({ ...slot, beats: slot.beats * factor }));
+  out.timeSignature = { ...ts };
+  // Tempo is felt per beat unit: moving to x/8 at the same number keeps the pulse.
   return out;
 }
 

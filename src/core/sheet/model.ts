@@ -73,6 +73,8 @@ export interface TrackSettings {
   /** Pattern id override; undefined = style default. */
   pattern?: string;
   voicing?: VoicingHint;
+  /** 0 = simple, 0.5 = the style as written, 1 = busy. Undefined = 0.5. */
+  complexity?: number;
 }
 
 export interface Arrangement {
