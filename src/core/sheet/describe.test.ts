@@ -28,8 +28,13 @@ describe("passage descriptions", () => {
 
   it("falls back to a key + numerals description", () => {
     const d = describeSection(...Object.values(section("Em C G D")) as [never, never]);
-    expect(d.title).toMatch(/progression|vi–IV–I–V/);
+    expect(d.title).toBe("minor pop loop i–♭VI–♭III–♭VII in E minor");
     expect(d.chords).toBe("Em – C – G – D");
+    const odd = describeSection(...Object.values(section("Cmaj7 Fmaj7 Bm7b5 E7 Am7")) as [never, never]);
+    expect(odd.title).toMatch(/progression$/);
+    // A looped verse reads as one cycle, not the whole repeated list.
+    const looped = describeSection(...Object.values(section("Am F C G Am F C G")) as [never, never]);
+    expect(looped.chords).toBe("Am – F – C – G");
   });
 
   it("derives modes of degrees", () => {
