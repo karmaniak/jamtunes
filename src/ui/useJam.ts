@@ -1,7 +1,8 @@
 /**
- * App state: the sheet, undo history, the audio engine, playback position,
- * chat. Everything that mutates the sheet goes through `commit`, which keeps
- * playback in sync (re-arranges live from the current bar).
+ * App state: the sheet, undo history, recent jams, the audio engine,
+ * playback position, chat. Everything that mutates the sheet goes through
+ * `commit`, which keeps playback in sync (re-arranges live from the current
+ * bar). No accounts: everything persists in this browser.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildTimeline, type SlotMarker, type Timeline } from "@core/arrange/arranger";
@@ -9,40 +10,84 @@ import { applyChanges, interpretLocally, summariseSheet, type SheetChanges } fro
 import { instrumentFor } from "@core/instruments";
 import { timelineToMidi } from "@core/midi/writer";
 import { sheetFromQuick, sheetFromText } from "@core/parse/build";
-import { TRACK_IDS, type ChordSheet } from "@core/sheet/model";
+import { keyLabel } from "@core/sheet/describe";
+import { totalBars, TRACK_IDS, type ChordSheet } from "@core/sheet/model";
 import { JamEngine, type EngineState } from "@audio/engine";
 
 export interface ChatMessage {
   id: number;
   role: "user" | "assistant";
   text: string;
-  source?: "claude" | "local";
+  source?: "ai" | "local";
   error?: boolean;
 }
 
 export interface ChatStatus {
-  mode: "unknown" | "claude" | "local";
-  credential?: string;
+  mode: "unknown" | "ai" | "local";
+}
+
+export interface RecentJam {
+  id: string;
+  title: string;
+  key: string;
+  style: string;
+  bars: number;
+  savedAt: number;
+  sheet: ChordSheet;
 }
 
 const STORAGE_KEY = "jamtunes.sheet.v1";
+const RECENT_KEY = "jamtunes.recent.v1";
+const DEVICE_KEY = "jamtunes.device.v1";
+const RECENT_MAX = 10;
 const DEMO = "[Verse]\n| Am F | C G |\n| Am F | C G |\n[Chorus]\nF G C Am\nF . G . C . . . E7 . . .";
+
+function migrate(sheet: ChordSheet): ChordSheet {
+  // Instrument ids change between versions; fall back to the role default.
+  for (const id of TRACK_IDS) sheet.arrangement.tracks[id].instrument = instrumentFor(id, sheet.arrangement.tracks[id].instrument).id;
+  return sheet;
+}
 
 function loadStored(): ChordSheet | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const sheet = JSON.parse(raw) as ChordSheet;
-    // Instrument ids change between versions; fall back to the role default.
-    for (const id of TRACK_IDS) sheet.arrangement.tracks[id].instrument = instrumentFor(id, sheet.arrangement.tracks[id].instrument).id;
-    return sheet;
+    return raw ? migrate(JSON.parse(raw) as ChordSheet) : null;
   } catch {
     return null;
   }
 }
 
+function loadRecent(): RecentJam[] {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
+    const list = raw ? (JSON.parse(raw) as RecentJam[]) : [];
+    return list.map((r) => ({ ...r, sheet: migrate(r.sheet) }));
+  } catch {
+    return [];
+  }
+}
+
+/** Anonymous per-browser id, only used so the server can apply fair-use limits. */
+function deviceId(): string {
+  try {
+    let id = localStorage.getItem(DEVICE_KEY);
+    if (!id) {
+      id = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36)).replace(/[^a-z0-9-]/gi, "").slice(0, 64);
+      localStorage.setItem(DEVICE_KEY, id);
+    }
+    return id;
+  } catch {
+    return "anon";
+  }
+}
+
+function toRecent(sheet: ChordSheet): RecentJam {
+  return { id: sheet.id, title: sheet.title || "Untitled jam", key: keyLabel(sheet.key), style: sheet.arrangement.style, bars: totalBars(sheet, false), savedAt: Date.now(), sheet };
+}
+
 export function useJam() {
   const [sheet, setSheetState] = useState<ChordSheet>(() => loadStored() ?? sheetFromQuick(DEMO, undefined, { style: "rock", title: "Demo jam" }).sheet);
+  const [recent, setRecent] = useState<RecentJam[]>(() => loadRecent());
   const [undo, setUndo] = useState<ChordSheet[]>([]);
   const [engineState, setEngineState] = useState<EngineState>("idle");
   const [loadLabel, setLoadLabel] = useState("");
@@ -92,23 +137,38 @@ export function useJam() {
     return engineRef.current;
   };
 
+  // Persist the current sheet immediately; refresh the recent list a beat later.
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(sheet));
     } catch {
       /* storage full or unavailable */
     }
+    const handle = window.setTimeout(() => {
+      try {
+        if (sheet.sections.length > 0) {
+          setRecent((list) => {
+            const next = [toRecent(sheet), ...list.filter((r) => r.id !== sheet.id)].slice(0, RECENT_MAX);
+            localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+            return next;
+          });
+        }
+      } catch {
+        /* storage full or unavailable */
+      }
+    }, 600);
+    return () => window.clearTimeout(handle);
   }, [sheet]);
 
   useEffect(() => () => engineRef.current?.dispose(), []);
 
-  // Ask the server how chat is connected (API key, `ant auth login` profile, or nothing).
+  // Is the band's AI available? (Operator-configured; users never set anything up.)
   useEffect(() => {
     let cancelled = false;
     fetch("/api/health")
       .then((r) => r.json())
-      .then((d: { chat?: "claude" | "local"; credential?: string }) => {
-        if (!cancelled) setChatStatus({ mode: d.chat ?? "local", credential: d.credential });
+      .then((d: { chat?: "ai" | "local" }) => {
+        if (!cancelled) setChatStatus({ mode: d.chat ?? "local" });
       })
       .catch(() => {
         if (!cancelled) setChatStatus({ mode: "local" });
@@ -183,32 +243,61 @@ export function useJam() {
   );
 
   const loadText = useCallback(
-    (text: string, source?: ChordSheet["source"], extra: { title?: string; artist?: string; key?: string } = {}) => {
-      const { sheet: s, warnings } = sheetFromText(extra.key ? `Key: ${extra.key}\n${text}` : text, { title: extra.title }, source);
+    (text: string) => {
+      const { sheet: s, warnings } = sheetFromText(text);
       if (s.sections.length === 0) {
         setNotice("No chord lines found in that text.");
         return;
       }
-      if (extra.artist) s.artist = extra.artist;
       commit(s);
       setNotice(warnings.length ? warnings.join(" · ") : null);
     },
     [commit],
   );
 
-  const loadUrl = useCallback(
-    async (url: string) => {
-      setNotice("Fetching chord sheet…");
+  const loadRecentJam = useCallback(
+    (id: string) => {
+      const r = recent.find((x) => x.id === id);
+      if (r) commit(structuredClone(r.sheet));
+    },
+    [recent, commit],
+  );
+
+  const removeRecentJam = useCallback((id: string) => {
+    setRecent((list) => {
+      const next = list.filter((r) => r.id !== id);
       try {
-        const res = await fetch(`/api/ug?url=${encodeURIComponent(url)}`);
-        const data = (await res.json()) as { error?: string; text?: string; title?: string; artist?: string; key?: string };
-        if (!res.ok || !data.text) throw new Error(data.error ?? "Fetch failed");
-        loadText(data.text, { kind: "url", url, text: data.text }, { title: data.title, artist: data.artist, key: data.key });
+        localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
+
+  const exportJson = useCallback(() => {
+    const s = sheetRef.current;
+    const blob = new Blob([JSON.stringify({ jamtunes: 1, sheet: s }, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${(s.title || "jam").replace(/[^\w\- ]+/g, "").trim() || "jam"}.jam.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }, []);
+
+  const importJson = useCallback(
+    async (file: File) => {
+      try {
+        const data = JSON.parse(await file.text()) as { sheet?: ChordSheet } | ChordSheet;
+        const s = "sheet" in data && data.sheet ? data.sheet : (data as ChordSheet);
+        if (!s || !Array.isArray(s.sections) || !s.arrangement) throw new Error("not a JamTunes file");
+        commit(migrate(structuredClone(s)));
+        setNotice(null);
       } catch (err) {
-        setNotice(`${err instanceof Error ? err.message : String(err)} — copy the chords from the page and use Paste instead.`);
+        setNotice(`Couldn't open that file: ${err instanceof Error ? err.message : String(err)}`);
       }
     },
-    [loadText],
+    [commit],
   );
 
   const sendChat = useCallback(
@@ -218,24 +307,24 @@ export function useJam() {
       setChat((c) => [...c, { id, role: "user", text: message }]);
       setChatBusy(true);
       let changes: SheetChanges | null = null;
-      let source: "claude" | "local" = "local";
+      let source: "ai" | "local" = "local";
       let serverError: string | null = null;
       try {
         const history = chat.slice(-8).map((m) => ({ role: m.role, content: m.text }));
         const res = await fetch("/api/chat", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", "x-jam-device": deviceId() },
           body: JSON.stringify({ message, sheetSummary: summariseSheet(current), history }),
         });
-        const data = (await res.json()) as { changes?: SheetChanges; source?: "claude" | "local"; error?: string };
+        const data = (await res.json()) as { changes?: SheetChanges; source?: "ai" | "local"; error?: string };
         if (res.ok && data.changes) {
           changes = data.changes;
-          source = data.source ?? "claude";
+          source = data.source ?? "ai";
         } else if (data.error) {
           serverError = data.error;
         }
       } catch {
-        serverError = "The API server isn't reachable (is `npm run dev` running?).";
+        serverError = chatStatus.mode === "ai" ? "Couldn't reach the band's AI; applied what I could locally." : null;
       }
       if (!changes) changes = interpretLocally(message, current);
       // Apply to the *latest* sheet: the user may have edited while we waited.
@@ -246,11 +335,11 @@ export function useJam() {
       } catch (err) {
         changes.reply += ` (Couldn't apply everything: ${err instanceof Error ? err.message : String(err)})`;
       }
-      const reply = serverError ? `${changes.reply}\n\n⚠ ${serverError}` : changes.reply;
+      const reply = serverError ? `${changes.reply}\n\n${serverError}` : changes.reply;
       setChat((c) => [...c, { id: id + 1, role: "assistant", text: reply, source, error: !!serverError }]);
       setChatBusy(false);
     },
-    [chat, commit],
+    [chat, chatStatus.mode, commit],
   );
 
   const exportMidi = useCallback(() => {
@@ -269,6 +358,11 @@ export function useJam() {
     commit,
     undoLast,
     canUndo: undo.length > 0,
+    recent,
+    loadRecentJam,
+    removeRecentJam,
+    exportJson,
+    importJson,
     engineState,
     loadLabel,
     activeSlotId,
@@ -283,7 +377,6 @@ export function useJam() {
     togglePlay,
     loadQuick,
     loadText,
-    loadUrl,
     chat,
     chatBusy,
     chatStatus,

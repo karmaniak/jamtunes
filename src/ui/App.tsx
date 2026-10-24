@@ -8,6 +8,7 @@ import { Band, Mixer } from "./components/Mixer";
 import { ChatPanel } from "./components/ChatPanel";
 import { ArrangementView } from "./components/ArrangementView";
 import { PlayAlongView } from "./components/PlayAlongView";
+import { ChordDiagrams } from "./components/ChordDiagrams";
 
 export function App() {
   const jam = useJam();
@@ -66,6 +67,7 @@ export function App() {
           {chatOpen && (
             <aside className="side right">
               <ChatPanel jam={jam} />
+              <ChordDiagrams jam={jam} />
             </aside>
           )}
         </div>

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { Jam } from "../useJam";
 
-const SUGGESTIONS = ["Moody 6/8 ballad in D dorian, 80 bpm", "Make it a funk groove", "Switch to lydian", "Mute the piano, add distorted guitar", "12-bar blues in A, shuffle"];
+const SUGGESTIONS = ["Moody 6/8 ballad in D dorian, 80 bpm", "Make it a funk groove", "Switch to lydian", "Busier drums, simpler bass", "12-bar blues in A, shuffle"];
 
 export function ChatPanel({ jam }: { jam: Jam }) {
   const [text, setText] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
-  const status = jam.chatStatus;
+  const ai = jam.chatStatus.mode === "ai";
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
@@ -19,24 +19,16 @@ export function ChatPanel({ jam }: { jam: Jam }) {
     void jam.sendChat(m);
   };
 
-  const connected = status.mode === "claude";
-
   return (
     <div className="panel chat">
       <div className="panel-head">
-        <h3>Vibe &amp; tasks</h3>
-        <span className={`pill ${connected ? "ok" : status.mode === "unknown" ? "" : "warn"}`} title={connected ? `Connected via ${status.credential}` : "Offline interpreter: tempo, style, key/mode, track and chord-list requests only"}>
-          {connected ? "Claude" : status.mode === "unknown" ? "…" : "offline"}
-        </span>
+        <h3>Tell the band</h3>
+        {jam.chatStatus.mode !== "unknown" && (
+          <span className={`pill ${ai ? "ok" : ""}`} title={ai ? "The band understands free-form requests" : "Basic requests: tempo, style, key/mode, instruments, chord lists"}>
+            {ai ? "listening" : "basic"}
+          </span>
+        )}
       </div>
-
-      {status.mode === "local" && (
-        <div className="connect-hint">
-          <strong>Connect your Claude</strong> to get free-form requests. In a terminal:
-          <pre>ant auth login</pre>
-          then restart <code>npm run dev</code>. (Or put <code>ANTHROPIC_API_KEY</code> in <code>.env</code>.) Needs the Anthropic CLI: <code>brew install anthropics/tap/ant</code>.
-        </div>
-      )}
 
       <div className="messages" ref={listRef}>
         {jam.chat.length === 0 && (
@@ -51,7 +43,6 @@ export function ChatPanel({ jam }: { jam: Jam }) {
         {jam.chat.map((m) => (
           <div key={m.id} className={`msg ${m.role}`}>
             <div className={`bubble ${m.error ? "error" : ""}`}>{m.text}</div>
-            {m.role === "assistant" && m.source === "local" && connected && <span className="muted tiny">offline interpreter</span>}
           </div>
         ))}
         {jam.chatBusy && (

@@ -6,7 +6,8 @@ basic kit) that you can loop and jam over. No keyboards, no piano rolls —
 the chord sheet is the instrument.
 
 - **Quick progression syntax** — `Am F C G`, `| Dm7 G7 | Cmaj7 |`, `E . . . A . B7 .`, `[Chorus] x2`
-- **Paste Ultimate-Guitar style sheets** (chords over lyrics, `[Section]` headers, inline `[C]chords`) or give a UG link
+- **Paste chord sheets** in the common chords-over-lyrics format (`[Section]` headers, inline `[C]chords`)
+- **Chord reference**: a guitar grid and piano diagram for whatever chord is playing (computed for any symbol)
 - **Styles**: rock, pop, ballad, funk, blues shuffle, jazz swing, bossa — each a data-defined set of rhythm patterns per meter
 - **Plug-and-play modes**: switch Lydian → Mixolydian and every chord is re-derived by scale degree
 - **Chat for vibe & tasks** ("moody 6/8 ballad in D dorian, 80 bpm"). The assistant only ever emits *sheet changes*; all notes come from the deterministic arranger. Works offline with a rule-based interpreter.
@@ -19,17 +20,25 @@ npm install
 npm run dev                   # web on :5173, api on :8787
 ```
 
-### Connect the chat to your Claude
+### The band's AI (operator setup — users configure nothing)
 
-The chat works offline for tempo / style / key / mode / track / chord-list requests. For free-form requests it talks to Claude, using whatever credential the Anthropic SDK finds — no key needs to be pasted into the app:
+"Tell the band" works without any AI for tempo / style / key / mode / instruments / chord lists (a deterministic interpreter). Free-form requests ("moody 6/8 ballad in D dorian") go to a language model that you, the operator, configure once with environment variables. The default is an open model on Hugging Face's OpenAI-compatible router:
 
 ```bash
-brew install anthropics/tap/ant     # Anthropic CLI (or: go install github.com/anthropics/anthropic-cli/cmd/ant@latest)
-ant auth login                      # opens the browser; stores an OAuth profile under ~/.config/anthropic
-npm run dev                         # the server reports "chat: Claude via profile"
+cp .env.example .env
+# HF_TOKEN=hf_...            from https://huggingface.co/settings/tokens
+npm run dev                  # logs "chat: openai-compatible · Qwen/Qwen2.5-7B-Instruct"
 ```
 
-Alternatively put `ANTHROPIC_API_KEY=...` in `.env`. The chat header shows **Claude** when connected and **offline** otherwise.
+Overrides: `AI_MODEL` (any chat model the endpoint serves), `AI_BASE_URL` + `AI_API_KEY` (vLLM, Ollama, Together, Groq…), or `AI_PROVIDER=anthropic` with `ANTHROPIC_API_KEY`. Every model reply is validated against the `SheetChanges` schema; anything malformed falls back to the local interpreter, so a weak model can never corrupt the sheet. Per-device fair-use limits: `AI_LIMIT_PER_MINUTE` (10), `AI_LIMIT_PER_DAY` (60), `AI_MAX_MESSAGE_CHARS` (2000).
+
+### Deploy
+
+**Vercel** (static bundle + the two API routes as functions): import the GitHub repo, add `HF_TOKEN` in *Settings → Environment Variables*, deploy. `vercel.json` is included; a custom domain is one DNS record. Rate limits are per function instance (best-effort), which is fine while the backend is a free quota.
+
+**Any Docker host** (Render, Railway, Fly): the `Dockerfile` serves app + API from one Node 22 process on port 8787 with the same env vars.
+
+No database, no accounts: jams persist in the browser (current sheet, last 10 recent jams) and can be saved/opened as `.jam.json` files.
 
 ### Sounds
 
@@ -63,7 +72,8 @@ src/core/                 pure TypeScript, no DOM, fully unit-tested
   instruments.ts  registry: role → sound source (soundfont / drum machine / future vst)
 src/audio/engine.ts       Web Audio look-ahead scheduler over sampled instruments
 src/ui/                   React: transport, chord sheet, input panel, mixer, chat
-server/                   Express: /api/chat (Claude, structured output) and /api/ug
+server/                   AI rails (provider interface, schema validation, rate limits) + Express dev server
+api/                      Vercel functions wrapping the same handlers
 ```
 
 Data flow: **parsers → ChordSheet → transforms → arranger → Timeline → {audio engine, MIDI file}**.

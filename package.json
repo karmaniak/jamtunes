@@ -4,6 +4,9 @@
   "private": true,
   "description": "Chord-sheet-first jam track generator. Describe a progression, get a MIDI-driven backing track to jam over.",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "concurrently -n web,api -c cyan,magenta \"vite\" \"tsx watch server/index.ts\"",
     "dev:web": "vite",
@@ -21,6 +24,7 @@
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "smplr": "^1.1.0",
+    "tsx": "^4.23.15",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -28,9 +32,9 @@
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@vercel/node": "^27.0.2",
     "@vitejs/plugin-react": "^6.0.1",
     "concurrently": "^10.0.6",
-    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.0.3",
     "vitest": "^5.0.5"

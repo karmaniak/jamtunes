@@ -9,10 +9,7 @@
     "noUnusedParameters": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node"],
-    "paths": {
-      "@core/*": ["../src/core/*"]
-    }
+    "types": ["node"]
   },
-  "include": ["./**/*.ts", "../src/core/**/*.ts"]
+  "include": ["./**/*.ts", "../api/**/*.ts", "../src/core/**/*.ts"]
 }

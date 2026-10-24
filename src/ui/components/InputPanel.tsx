@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { STYLES } from "@core/arrange/styles";
 import type { Jam } from "../useJam";
 
-type Tab = "quick" | "paste" | "link";
+type Tab = "quick" | "paste" | "recent";
 
 export function InputPanel({ jam }: { jam: Jam }) {
   const [tab, setTab] = useState<Tab>("quick");
@@ -10,14 +10,14 @@ export function InputPanel({ jam }: { jam: Jam }) {
   const [timing, setTiming] = useState("");
   const [style, setStyle] = useState("rock");
   const [pasted, setPasted] = useState("");
-  const [url, setUrl] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="panel input-panel">
       <div className="tabs">
-        {(["quick", "paste", "link"] as Tab[]).map((t) => (
+        {(["quick", "paste", "recent"] as Tab[]).map((t) => (
           <button key={t} className={`tab ${tab === t ? "on" : ""}`} onClick={() => setTab(t)}>
-            {t === "quick" ? "Progression" : t === "paste" ? "Paste sheet" : "UG link"}
+            {t === "quick" ? "Progression" : t === "paste" ? "Paste sheet" : `Recent${jam.recent.length ? ` (${jam.recent.length})` : ""}`}
           </button>
         ))}
       </div>
@@ -77,25 +77,48 @@ export function InputPanel({ jam }: { jam: Jam }) {
               Import
             </button>
           </div>
-          <p className="hint muted small">Ultimate-Guitar style: chords above lyrics, [Section] headers, inline [C]chords. Each chord gets a bar unless bar lines are written.</p>
+          <p className="hint muted small">Chord-sheet style: chords above lyrics, [Section] headers, inline [C]chords. Each chord gets a bar unless bar lines are written.</p>
         </form>
       )}
 
-      {tab === "link" && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void jam.loadUrl(url);
-          }}
-        >
-          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://tabs.ultimate-guitar.com/tab/…" spellCheck={false} />
+      {tab === "recent" && (
+        <div className="recent">
+          {jam.recent.length === 0 && <p className="muted small">Jams you build show up here automatically and stay on this device.</p>}
+          <ul className="recent-list">
+            {jam.recent.map((r) => (
+              <li key={r.id} className={r.id === jam.sheet.id ? "current" : ""}>
+                <button className="recent-item" onClick={() => jam.loadRecentJam(r.id)} title="Open this jam">
+                  <span className="recent-title">{r.title}</span>
+                  <span className="muted tiny">
+                    {r.key} · {r.style} · {r.bars} bars · {new Date(r.savedAt).toLocaleDateString()}
+                  </span>
+                </button>
+                <button className="ghost danger" title="Forget" onClick={() => jam.removeRecentJam(r.id)}>
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
           <div className="row">
-            <button className="primary" type="submit" disabled={!/^https?:\/\//.test(url)}>
-              Fetch
+            <button className="ghost" onClick={jam.exportJson} title="Save the current jam as a file you can open on another device">
+              Save file
             </button>
+            <button className="ghost" onClick={() => fileRef.current?.click()}>
+              Open file…
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/json,.json,.jam.json"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void jam.importJson(f);
+                e.target.value = "";
+              }}
+            />
           </div>
-          <p className="hint muted small">Fetched through the local server. UG sometimes blocks automated requests — pasting the chords always works.</p>
-        </form>
+        </div>
       )}
     </div>
   );

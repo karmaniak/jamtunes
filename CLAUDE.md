@@ -22,4 +22,6 @@ Chord-sheet-first jam track generator. Read `README.md` for the layout.
 - `npm run dev` — vite (5173) + express api (8787, proxied under /api)
 
 ## Chat backend
-`server/chat.ts` uses `@anthropic-ai/sdk` `client.beta.messages.parse` with a Zod structured-output schema and `fallbacks: "default"`. Without `ANTHROPIC_API_KEY` the client falls back to `interpretLocally`.
+`server/ai.ts` holds the provider interface: `openai-compatible` (default; HF router + `Qwen/Qwen2.5-7B-Instruct`, any `/v1/chat/completions` endpoint via env) and `anthropic` (SDK structured outputs). Every reply is coerced + validated against `SheetChangesSchema`; failures fall back to `interpretLocally` client-side. `server/handlers.ts` is framework-agnostic and shared by the Express dev server (`server/index.ts`) and the Vercel functions (`api/*.ts`). Rate limits live in `server/ratelimit.ts`. **Users never configure AI** — the operator sets env vars; don't add key/URL inputs to the UI.
+- No Ultimate Guitar fetching (removed: bot-blocked and ToS-grey). Paste is the import path.
+- Persistence is browser-only (`localStorage`: current sheet, recent jams, device id) plus `.jam.json` files. No accounts.

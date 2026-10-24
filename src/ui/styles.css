@@ -1060,6 +1060,106 @@ button.link {
   text-align: center;
 }
 
+/* Right column: chat on top, chord reference below */
+.side.right {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.side.right .chat {
+  flex: 1 1 50%;
+  min-height: 0;
+  padding: 12px;
+}
+.diagrams {
+  flex: 1 1 50%;
+  min-height: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--bg-2);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+.diagrams .diagram-row {
+  flex: 1;
+  align-items: center;
+}
+.diagram-name {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.diagram-symbol {
+  font-family: var(--mono);
+  font-size: 30px;
+  font-weight: 600;
+}
+.diagram-tones {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.diagram-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.diagram-row figure {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.guitar-grid {
+  width: 100%;
+  max-width: 170px;
+  color: var(--text);
+}
+.piano-keys {
+  width: 100%;
+  max-width: 260px;
+}
+.diagram-symbol {
+  font-size: 36px;
+}
+
+/* Recent jams */
+.recent-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  overflow: auto;
+}
+.recent-list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.recent-list li.current .recent-item {
+  border-color: var(--accent);
+}
+.recent-item {
+  flex: 1;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  background: var(--bg-2);
+}
+.recent-title {
+  font-weight: 500;
+}
+
 @media (max-width: 900px) {
   .layout,
   .layout.with-chat {
