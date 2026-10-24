@@ -65,20 +65,75 @@ export function summariseSheet(sheet: ChordSheet): string {
   return lines.join("\n");
 }
 
-export function applyChanges(sheet: ChordSheet, c: SheetChanges): ChordSheet {
+/**
+ * Models and people write progressions many ways: "Cmaj7 - Am7 - Dm7 - G7",
+ * "Cmaj7, Am7", "Cmaj7 → Am7", "||: Am | F :||". Bring them to quick syntax.
+ */
+export function normaliseProgression(text: string): string {
+  return text
+    .replace(/\|\|:|:\|\||\|\|/g, "|")
+    .replace(/[→➜➔,;]+/g, " ")
+    .replace(/(^|\s)[-–—]+(?=\s|$)/g, " ") // dashes used as separators (not "-7" suffixes)
+    .replace(/\b(bars?|beats?|then|and)\b:?/gi, " ")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+/** A short title when none was given: the request's gist, else style + key. */
+export function autoTitle(sheet: ChordSheet, hint?: string | null): string {
+  if (hint) {
+    const cleaned = hint
+      .replace(/^(please\s+)?(i\s+(want|need|would like)\s+(a|an|some)?\s*|make\s+(me\s+)?(a|an|it)?\s*|give\s+me\s+(a|an)?\s*|can\s+you\s+(make|give\s+me)\s+(a|an)?\s*|let'?s\s+(do|try|have)\s+(a|an)?\s*)/i, "")
+      .replace(/[:.!?].*$/, "")
+      .trim();
+    const words = cleaned.split(/\s+/).filter((w) => !looksLikeChord(w) && !/^[|.()x×\d-]+$/.test(w));
+    if (words.length >= 2 && words.length <= 7) return words.join(" ").replace(/^./, (ch) => ch.toUpperCase());
+  }
+  const style = STYLES.find((s) => s.id === sheet.arrangement.style)?.label ?? sheet.arrangement.style;
+  return `${style} in ${sheet.key.tonic} ${sheet.key.mode === "ionian" ? "major" : sheet.key.mode === "aeolian" ? "minor" : sheet.key.mode}`;
+}
+
+/** Which fields of a sheet differ — so the reply can say what actually happened. */
+export function describeDiff(before: ChordSheet, after: ChordSheet): string[] {
+  const out: string[] = [];
+  if (before === after) return out;
+  if (before.tempo !== after.tempo) out.push(`tempo ${before.tempo}→${after.tempo}`);
+  if (before.arrangement.style !== after.arrangement.style) out.push(`style ${after.arrangement.style}`);
+  if (before.key.tonic !== after.key.tonic || before.key.mode !== after.key.mode) out.push(`key ${after.key.tonic} ${after.key.mode}`);
+  if (before.timeSignature.beats !== after.timeSignature.beats || before.timeSignature.unit !== after.timeSignature.unit) out.push(`time ${after.timeSignature.beats}/${after.timeSignature.unit}`);
+  if (before.arrangement.swing !== after.arrangement.swing) out.push(`swing ${Math.round(after.arrangement.swing * 100)}%`);
+  const beforeChords = before.sections.map((s) => s.bars.map((b) => b.slots.map((sl) => sl.symbol).join(" ")).join("|")).join("/");
+  const afterChords = after.sections.map((s) => s.bars.map((b) => b.slots.map((sl) => sl.symbol).join(" ")).join("|")).join("/");
+  if (beforeChords !== afterChords) out.push(`new progression (${after.sections.reduce((n, s) => n + s.bars.length, 0)} bars)`);
+  if (before.title !== after.title) out.push(`titled “${after.title}”`);
+  for (const id of TRACK_IDS) {
+    const a = before.arrangement.tracks[id];
+    const b = after.arrangement.tracks[id];
+    if (a.enabled !== b.enabled) out.push(`${id} ${b.enabled ? "on" : "off"}`);
+    if ((a.complexity ?? 0.5) !== (b.complexity ?? 0.5)) out.push(`${id} ${(b.complexity ?? 0.5) > (a.complexity ?? 0.5) ? "busier" : "simpler"}`);
+    if (a.volume !== b.volume) out.push(`${id} ${Math.round(b.volume * 100)}%`);
+  }
+  return out;
+}
+
+export function applyChanges(sheet: ChordSheet, c: SheetChanges, requestText?: string): ChordSheet {
   let out = sheet;
   if (c.progression) {
     const styleChanged = !!c.style && c.style !== out.arrangement.style;
-    const { sheet: fresh } = sheetFromQuick(c.progression, undefined, {
+    const { sheet: fresh } = sheetFromQuick(normaliseProgression(c.progression), undefined, {
       style: c.style ?? out.arrangement.style,
       // A new style with no explicit tempo takes the style's own tempo.
       tempo: c.tempo ?? (styleChanged ? undefined : out.tempo),
       timeSignature: c.timeSignature ?? out.timeSignature,
-      title: c.title ?? out.title,
+      title: c.title ?? undefined,
     });
-    fresh.arrangement = { ...out.arrangement, style: fresh.arrangement.style, tracks: fresh.arrangement.tracks, swing: fresh.arrangement.swing };
-    fresh.source = { kind: "chat", text: c.progression };
-    out = fresh;
+    // Never replace a sheet with nothing: an unparsable progression is ignored, the rest still applies.
+    if (fresh.sections.length > 0) {
+      fresh.arrangement = { ...out.arrangement, style: fresh.arrangement.style, tracks: fresh.arrangement.tracks, swing: fresh.arrangement.swing };
+      fresh.source = { kind: "chat", text: c.progression };
+      if (!c.title) fresh.title = autoTitle(fresh, requestText);
+      out = fresh;
+    }
   }
   if (c.style && c.style !== out.arrangement.style) out = setStyle(out, c.style, { keepTempo: c.tempo === null && !c.progression });
   if (c.tempo) out = setTempo(out, c.tempo);

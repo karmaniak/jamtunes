@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildTimeline, type SlotMarker, type Timeline } from "@core/arrange/arranger";
-import { applyChanges, interpretLocally, summariseSheet, type SheetChanges } from "@core/chat/intent";
+import { applyChanges, describeDiff, interpretLocally, summariseSheet, type SheetChanges } from "@core/chat/intent";
 import { instrumentFor } from "@core/instruments";
 import { timelineToMidi } from "@core/midi/writer";
 import { sheetFromQuick, sheetFromText } from "@core/parse/build";
@@ -329,13 +329,17 @@ export function useJam() {
       if (!changes) changes = interpretLocally(message, current);
       // Apply to the *latest* sheet: the user may have edited while we waited.
       const latest = sheetRef.current;
+      let applied: string[] = [];
       try {
-        const next = applyChanges(latest, changes);
-        if (next !== latest) commit(next);
+        const next = applyChanges(latest, changes, message);
+        applied = describeDiff(latest, next);
+        if (next !== latest && applied.length) commit(next);
       } catch (err) {
         changes.reply += ` (Couldn't apply everything: ${err instanceof Error ? err.message : String(err)})`;
       }
-      const reply = serverError ? `${changes.reply}\n\n${serverError}` : changes.reply;
+      // The reply is the model's claim; the diff is what actually happened.
+      const receipt = applied.length ? `✓ ${applied.join(" · ")}` : "— nothing changed on the sheet";
+      const reply = `${changes.reply}\n${receipt}${serverError ? `\n\n${serverError}` : ""}`;
       setChat((c) => [...c, { id: id + 1, role: "assistant", text: reply, source, error: !!serverError }]);
       setChatBusy(false);
     },

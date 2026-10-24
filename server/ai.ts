@@ -28,7 +28,7 @@ export interface AIConfig {
 
 /** Defaults: Hugging Face's OpenAI-compatible router with a solid open instruct model. */
 export const DEFAULT_OPENAI_BASE_URL = "https://router.huggingface.co/v1";
-export const DEFAULT_OPENAI_MODEL = "Qwen/Qwen2.5-7B-Instruct";
+export const DEFAULT_OPENAI_MODEL = "Qwen/Qwen2.5-72B-Instruct";
 export const DEFAULT_ANTHROPIC_MODEL = "claude-haiku-5-5";
 
 export function resolveConfig(env: NodeJS.ProcessEnv = process.env): AIConfig {
@@ -74,8 +74,12 @@ Progressions use quick syntax, one bar per chord unless bars are written with |:
   | Am F | C G |            two chords per bar
   Am . . . F . C(2) G(2)    dots = beats, (n) = beats
   [Verse] / [Chorus] x2     section headers, x2 repeats
-Write a full progression (all sections) whenever you set it. Prefer real musical choices: for a vibe request with no chords given, pick an idiomatic progression in a fitting key, set style and tempo, and explain briefly in reply.
-If the user names a song, do not reproduce copyrighted lyrics; a chord progression and section layout is fine.`;
+Write a full progression (all sections) whenever you set it, as plain space-separated chord symbols (Am, F#m7, G/B, Cmaj7#11, N.C.) — never dashes, commas or words between chords. Prefer real musical choices: for a vibe request with no chords given, pick an idiomatic progression in a fitting key (use sevenths, slash chords and borrowed chords where the style calls for it), set style and tempo, give it a short evocative title (2–4 words), and explain the choice in one or two sentences in reply.
+Be decisive: when the user asks for a change, make it. Only reply with nothing changed when the request really isn't about the sheet.
+If the user names a song, do not reproduce copyrighted lyrics; a chord progression and section layout is fine.
+
+Example request: "something moody and quiet in D dorian, slow"
+Example answer: {"reply":"A slow D dorian vamp — the Em7 on the IV keeps the dorian colour, the Cmaj7 adds air before the turnaround.","tempo":72,"style":"ballad","key":{"tonic":"D","mode":"dorian"},"transpose":null,"timeSignature":null,"swing":null,"progression":"[Verse]\\n| Dm7 | Dm7 | Em7 | Dm7 |\\n| Dm7 | Cmaj7 | Em7 Am7 | Dm7 |\\n[Bridge]\\n| Fmaj7 | Gmaj7 | Em7 | Am7 |","title":"Quiet dorian evening","tracks":[{"id":"drums","enabled":null,"volume":null,"voicing":null,"complexity":0.25}]}`;
 
 const JSON_INSTRUCTIONS = `Reply with a single JSON object and nothing else — no prose before or after, no markdown fences. It must match this JSON Schema exactly (every key present; use null for "no change"):\n`;
 
@@ -141,7 +145,7 @@ async function runOpenAICompatible(req: ChatRequest, cfg: AIConfig): Promise<Cha
     const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
       method: "POST",
       headers: { "content-type": "application/json", ...(cfg.apiKey ? { authorization: `Bearer ${cfg.apiKey}` } : {}) },
-      body: JSON.stringify({ model: cfg.model, messages, temperature: 0.3, max_tokens: 900, response_format: { type: "json_object" } }),
+      body: JSON.stringify({ model: cfg.model, messages, temperature: 0.4, max_tokens: 1200, response_format: { type: "json_object" } }),
       signal: controller.signal,
     });
     if (!res.ok) {
@@ -151,8 +155,9 @@ async function runOpenAICompatible(req: ChatRequest, cfg: AIConfig): Promise<Cha
     const data = (await res.json()) as { choices?: { message?: { content?: string | { text?: string }[] } }[]; model?: string };
     const raw = data.choices?.[0]?.message?.content;
     const text = typeof raw === "string" ? raw : Array.isArray(raw) ? raw.map((p) => p.text ?? "").join("") : "";
+    if (process.env.AI_DEBUG) console.log(`[ai] ${cfg.model} replied:\n${text.slice(0, 2000)}`);
     const changes = coerceChanges(extractJsonObject(text));
-    if (!changes) throw new Error("AI reply was not a valid sheet change");
+    if (!changes) throw new Error(`AI reply was not a valid sheet change${process.env.AI_DEBUG ? "" : " (set AI_DEBUG=1 to log replies)"}`);
     return { changes, source: "ai", model: data.model ?? cfg.model };
   } finally {
     clearTimeout(timer);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyChanges, extractProgression, interpretLocally } from "./intent";
+import { applyChanges, describeDiff, emptyChanges, extractProgression, interpretLocally, normaliseProgression } from "./intent";
 import { sheetFromQuick } from "../parse/build";
 import { parseQuick } from "../parse/quick";
 
@@ -38,6 +38,40 @@ describe("offline interpreter", () => {
     const all = interpretLocally("make it simpler", base).tracks!;
     expect(all.map((t) => t.id)).toEqual(["piano", "bass", "drums"]);
     expect(all[0].complexity).toBe(0.25);
+  });
+});
+
+describe("applying model output", () => {
+  it("normalises dash / comma / arrow separated progressions", () => {
+    expect(normaliseProgression("Cmaj7 - Am7 - Dm7 - G7")).toBe("Cmaj7 Am7 Dm7 G7");
+    expect(normaliseProgression("Cmaj7, Am7, Dm7 → G7")).toBe("Cmaj7 Am7 Dm7 G7");
+    expect(normaliseProgression("||: Am | F :|| then C")).toBe("| Am | F | C");
+    expect(normaliseProgression("Dm7 G7 Cmaj7 A-7")).toBe("Dm7 G7 Cmaj7 A-7"); // minor suffix kept
+  });
+
+  it("titles a new progression from the request, else from style + key", () => {
+    const c = { ...emptyChanges("ok"), progression: "Dm7 - G7 - Cmaj7", style: "swing" as const };
+    const next = applyChanges(base, c, "I want a late night jazz vamp: Dm7 - G7 - Cmaj7");
+    expect(next.title).toBe("Late night jazz vamp");
+    expect(next.sections[0].bars.map((b) => b.slots[0].symbol)).toEqual(["Dm7", "G7", "Cmaj7"]);
+    const untitled = applyChanges(base, { ...emptyChanges("ok"), progression: "Em C G D" });
+    expect(untitled.title).toMatch(/^Rock in E minor$/);
+    expect(applyChanges(base, { ...emptyChanges("ok"), progression: "Em C G D", title: "Road song" }).title).toBe("Road song");
+  });
+
+  it("never replaces the sheet with an empty parse", () => {
+    const next = applyChanges(base, { ...emptyChanges("ok"), progression: "la la la", tempo: 90 });
+    expect(next.sections.length).toBe(base.sections.length);
+    expect(next.tempo).toBe(90);
+  });
+
+  it("describes what actually changed", () => {
+    expect(describeDiff(base, base)).toEqual([]);
+    const next = applyChanges(base, { ...emptyChanges("ok"), tempo: 84, style: "ballad", tracks: [{ id: "drums", enabled: null, volume: null, voicing: null, complexity: 0.8 }] });
+    const diff = describeDiff(base, next);
+    expect(diff).toContain("tempo 120→84");
+    expect(diff).toContain("style ballad");
+    expect(diff).toContain("drums busier");
   });
 });
 

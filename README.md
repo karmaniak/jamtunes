@@ -27,10 +27,10 @@ npm run dev                   # web on :5173, api on :8787
 ```bash
 cp .env.example .env
 # HF_TOKEN=hf_...            from https://huggingface.co/settings/tokens
-npm run dev                  # logs "chat: openai-compatible · Qwen/Qwen2.5-7B-Instruct"
+npm run dev                  # logs "chat: openai-compatible · Qwen/Qwen2.5-72B-Instruct"
 ```
 
-Overrides: `AI_MODEL` (any chat model the endpoint serves), `AI_BASE_URL` + `AI_API_KEY` (vLLM, Ollama, Together, Groq…), or `AI_PROVIDER=anthropic` with `ANTHROPIC_API_KEY`. Every model reply is validated against the `SheetChanges` schema; anything malformed falls back to the local interpreter, so a weak model can never corrupt the sheet. Per-device fair-use limits: `AI_LIMIT_PER_MINUTE` (10), `AI_LIMIT_PER_DAY` (60), `AI_MAX_MESSAGE_CHARS` (2000).
+Overrides: `AI_MODEL` (any chat model the endpoint serves — the 72B default has far better chord sense than 7B-class models), `AI_BASE_URL` + `AI_API_KEY` (vLLM, Ollama, Together, Groq…), or `AI_PROVIDER=anthropic` with `ANTHROPIC_API_KEY`. Every model reply is validated against the `SheetChanges` schema; anything malformed falls back to the local interpreter, so a weak model can never corrupt the sheet, and every chat reply ends with a receipt of what actually changed on the sheet. Per-device fair-use limits: `AI_LIMIT_PER_MINUTE` (10), `AI_LIMIT_PER_DAY` (60), `AI_MAX_MESSAGE_CHARS` (2000). Set `AI_DEBUG=1` to log raw model replies when something looks off.
 
 ### Deploy
 

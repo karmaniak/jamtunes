@@ -7,7 +7,7 @@ describe("AI config", () => {
     const cfg = resolveConfig({ HF_TOKEN: "hf_x" } as NodeJS.ProcessEnv);
     expect(cfg.provider).toBe("openai-compatible");
     expect(cfg.baseUrl).toBe("https://router.huggingface.co/v1");
-    expect(cfg.model).toBe("Qwen/Qwen2.5-7B-Instruct");
+    expect(cfg.model).toBe("Qwen/Qwen2.5-72B-Instruct");
   });
   it("falls back to anthropic or none", () => {
     expect(resolveConfig({ ANTHROPIC_API_KEY: "k" } as NodeJS.ProcessEnv).provider).toBe("anthropic");
