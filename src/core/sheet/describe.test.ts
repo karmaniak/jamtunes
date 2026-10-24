@@ -28,7 +28,7 @@ describe("passage descriptions", () => {
 
   it("falls back to a key + numerals description", () => {
     const d = describeSection(...Object.values(section("Em C G D")) as [never, never]);
-    expect(d.title).toBe("minor pop loop i–♭VI–♭III–♭VII in E minor");
+    expect(d.title).toBe("Minor pop loop in E minor");
     expect(d.chords).toBe("Em – C – G – D");
     const odd = describeSection(...Object.values(section("Cmaj7 Fmaj7 Bm7b5 E7 Am7")) as [never, never]);
     expect(odd.title).toMatch(/progression$/);

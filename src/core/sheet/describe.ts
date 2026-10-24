@@ -111,11 +111,11 @@ export function describeSection(section: Section, key: KeySpec): PassageDescript
     [/^I–vi–IV–V$/, "50s doo-wop I–vi–IV–V"],
     [/^I–IV–V(–IV)?$/, "I–IV–V"],
     [/^i–♭VII–♭VI(–V7?)?$/, "Andalusian cadence"],
-    [/^i–♭VII–♭VI–♭VII$/, "i–♭VII–♭VI–♭VII"],
-    [/^i–♭VI–♭III–♭VII$/, "minor pop loop i–♭VI–♭III–♭VII"],
-    [/^i–♭III–♭VII–♭VI$/, "i–♭III–♭VII–♭VI"],
+    [/^i–♭VII–♭VI–♭VII$/, "Aeolian vamp"],
+    [/^i–♭VI–♭III–♭VII$/, "Minor pop loop"],
+    [/^i–♭III–♭VII–♭VI$/, "Minor pop loop"],
     [/^i–iv–V7?$/, "i–iv–V"],
-    [/^I–♭VII–IV(–I)?$/, "I–♭VII–IV (mixolydian rock)"],
+    [/^I–♭VII–IV(–I)?$/, "Mixolydian rock"],
   ];
   const canon = numeralsText.replace(/7/g, "").replace(/maj/g, "");
   for (const [re, name] of shapes) {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { describeTimeline } from "@core/arrange/arranger";
 import { useJam } from "./useJam";
+import { MOBILE_QUERY, useMediaQuery } from "./useMediaQuery";
 import { Transport, type View } from "./components/Transport";
 import { SheetView } from "./components/SheetView";
 import { InputPanel } from "./components/InputPanel";
@@ -9,11 +10,13 @@ import { ChatPanel } from "./components/ChatPanel";
 import { ArrangementView } from "./components/ArrangementView";
 import { PlayAlongView } from "./components/PlayAlongView";
 import { ChordDiagrams } from "./components/ChordDiagrams";
+import { MobileLayout } from "./components/MobileLayout";
 
 export function App() {
   const jam = useJam();
   const [chatOpen, setChatOpen] = useState(true);
   const [view, setView] = useState<View>("sheet");
+  const mobile = useMediaQuery(MOBILE_QUERY);
   const debug = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debug") === "notes";
 
   useEffect(() => {
@@ -32,6 +35,8 @@ export function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [jam]);
+
+  if (mobile) return <MobileLayout jam={jam} view={view} setView={setView} />;
 
   return (
     <div className="app">

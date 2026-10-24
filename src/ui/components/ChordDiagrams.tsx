@@ -39,8 +39,11 @@ export function ChordDiagrams({ jam }: { jam: Jam }) {
           </div>
           <div className="diagram-row">
             <figure>
-              {shape ? <GuitarGrid shape={shape} /> : <div className="muted small">No comfortable guitar shape</div>}
-              <figcaption className="muted tiny">Guitar{shape && shape.position > 1 ? ` · ${shape.position}fr` : ""}</figcaption>
+              {shape && <GuitarGrid shape={shape} />}
+              <figcaption className="muted tiny">
+                Guitar{shape && shape.position > 1 ? ` · ${shape.position}fr` : ""}
+                {shape && shape.missing.length > 0 ? " · no 5th" : ""}
+              </figcaption>
             </figure>
             <figure>
               <PianoKeys notes={pianoNotes} />

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseChord } from "./chords";
-import { guitarShape, pianoChordNotes } from "./guitarShapes";
+import { guitarShape, pianoChordNotes, TUNING } from "./guitarShapes";
 
 const shape = (symbol: string) => guitarShape(parseChord(symbol)!)!.frets.map((f) => (f < 0 ? "x" : String(f))).join("");
 
@@ -32,6 +32,19 @@ describe("guitar shapes", () => {
     expect(shape("Cmaj7")).toBe("x32000");
     expect(guitarShape(parseChord("F#m7b5")!)).not.toBeNull();
     expect(guitarShape(parseChord("Bb13")!)).not.toBeNull();
+  });
+
+  it("always finds a shape, relaxing rules when it must", () => {
+    const tricky = ["E7#9", "Bb13", "C69", "G7b9", "Abmaj7#11", "Dm7b5/Ab", "F#dim7", "Cadd9/E", "B7sus4", "Ebm6", "C7#5", "Gmaj9", "A7alt", "Dbm9", "F/G", "Bbm7b5", "E9", "C#m11"];
+    for (const sym of tricky) {
+      const s = guitarShape(parseChord(sym)!);
+      expect(s, sym).not.toBeNull();
+      expect(s!.frets.filter((f) => f >= 0).length, sym).toBeGreaterThanOrEqual(2);
+    }
+    // Every essential tone of E7#9 (E, G#, D, G) is in whatever shape wins.
+    const e79 = guitarShape(parseChord("E7#9")!)!;
+    const pcs = new Set(e79.frets.map((f, i) => (f < 0 ? -1 : (TUNING[i] + f) % 12)).filter((p) => p >= 0));
+    for (const pc of [4, 8, 2, 7]) expect(pcs.has(pc), `E7#9 has pc ${pc}`).toBe(true);
   });
 
   it("builds piano diagram notes from the root up", () => {
