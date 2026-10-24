@@ -8,6 +8,8 @@ export interface RateLimits {
   perMinute: number;
   perDay: number;
   maxMessageChars: number;
+  /** Brake on total spend: AI requests per day across everyone (per server instance). */
+  globalPerDay: number;
 }
 
 export function limitsFromEnv(env: NodeJS.ProcessEnv = process.env): RateLimits {
@@ -15,8 +17,11 @@ export function limitsFromEnv(env: NodeJS.ProcessEnv = process.env): RateLimits 
     perMinute: Number(env.AI_LIMIT_PER_MINUTE ?? 10),
     perDay: Number(env.AI_LIMIT_PER_DAY ?? 60),
     maxMessageChars: Number(env.AI_MAX_MESSAGE_CHARS ?? 2000),
+    globalPerDay: Number(env.AI_GLOBAL_PER_DAY ?? 5000),
   };
 }
+
+export const GLOBAL_KEY = "*";
 
 interface Bucket {
   minute: number[];
@@ -31,10 +36,11 @@ export class RateLimiter {
   check(key: string): "minute" | "day" | null {
     const t = this.now();
     const b = this.buckets.get(key) ?? { minute: [], day: [] };
+    const global = key === GLOBAL_KEY;
     b.minute = b.minute.filter((x) => t - x < 60_000);
     b.day = b.day.filter((x) => t - x < 86_400_000);
-    if (b.minute.length >= this.limits.perMinute) return "minute";
-    if (b.day.length >= this.limits.perDay) return "day";
+    if (!global && b.minute.length >= this.limits.perMinute) return "minute";
+    if (b.day.length >= (global ? this.limits.globalPerDay : this.limits.perDay)) return "day";
     b.minute.push(t);
     b.day.push(t);
     this.buckets.set(key, b);

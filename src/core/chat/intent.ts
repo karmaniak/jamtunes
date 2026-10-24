@@ -93,6 +93,13 @@ export function autoTitle(sheet: ChordSheet, hint?: string | null): string {
   return `${style} in ${sheet.key.tonic} ${sheet.key.mode === "ionian" ? "major" : sheet.key.mode === "aeolian" ? "minor" : sheet.key.mode}`;
 }
 
+/** Titles the app made up itself (placeholders and style-in-key names), as opposed to ones a person typed. */
+export function isAutoTitle(title: string): boolean {
+  if (/^(Demo jam|Quick jam|Untitled jam|Pasted sheet)$/i.test(title.trim())) return true;
+  const styles = STYLES.map((s) => s.label).join("|");
+  return new RegExp(`^(${styles}) in [A-G](#|b)? (major|minor|dorian|phrygian|lydian|mixolydian|locrian)$`).test(title.trim());
+}
+
 /** Which fields of a sheet differ — so the reply can say what actually happened. */
 export function describeDiff(before: ChordSheet, after: ChordSheet): string[] {
   const out: string[] = [];
@@ -147,6 +154,10 @@ export function applyChanges(sheet: ChordSheet, c: SheetChanges, requestText?: s
     if (tonicOk) out = relabelKey(out, c.key.tonic, c.key.mode);
   }
   if (c.title && !c.progression) out = { ...out, title: c.title };
+  // A placeholder / auto title follows the music: a new style or key renames the sheet.
+  else if (!c.progression && isAutoTitle(out.title) && (out.arrangement.style !== sheet.arrangement.style || out.key.tonic !== sheet.key.tonic || out.key.mode !== sheet.key.mode)) {
+    out = { ...out, title: autoTitle(out, requestText) };
+  }
   if (c.tracks) {
     for (const t of c.tracks) {
       const patch: Partial<ChordSheet["arrangement"]["tracks"][TrackId]> = {};

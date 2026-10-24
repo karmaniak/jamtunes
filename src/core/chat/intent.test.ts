@@ -59,6 +59,14 @@ describe("applying model output", () => {
     expect(applyChanges(base, { ...emptyChanges("ok"), progression: "Em C G D", title: "Road song" }).title).toBe("Road song");
   });
 
+  it("renames placeholder titles when the style or key changes without a new progression", () => {
+    expect(base.title).toBe("Quick jam");
+    const restyled = applyChanges(base, { ...emptyChanges("ok"), style: "swing" }, "make it swing");
+    expect(restyled.title).toBe("Jazz swing in A minor");
+    const kept = applyChanges({ ...base, title: "My tune" }, { ...emptyChanges("ok"), style: "swing" });
+    expect(kept.title).toBe("My tune");
+  });
+
   it("never replaces the sheet with an empty parse", () => {
     const next = applyChanges(base, { ...emptyChanges("ok"), progression: "la la la", tempo: 90 });
     expect(next.sections.length).toBe(base.sections.length);

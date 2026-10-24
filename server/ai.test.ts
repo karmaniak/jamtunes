@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { coerceChanges, extractJsonObject, resolveConfig, sheetChangesJsonSchema } from "./ai";
-import { deviceKey, RateLimiter } from "./ratelimit";
+import { deviceKey, GLOBAL_KEY, RateLimiter } from "./ratelimit";
 
 describe("AI config", () => {
   it("defaults to the HF router with an open model when a token is present", () => {
@@ -9,8 +9,12 @@ describe("AI config", () => {
     expect(cfg.baseUrl).toBe("https://router.huggingface.co/v1");
     expect(cfg.model).toBe("Qwen/Qwen2.5-72B-Instruct");
   });
-  it("falls back to anthropic or none", () => {
-    expect(resolveConfig({ ANTHROPIC_API_KEY: "k" } as NodeJS.ProcessEnv).provider).toBe("anthropic");
+  it("prefers Anthropic (Haiku) when its key is set, else none", () => {
+    const a = resolveConfig({ ANTHROPIC_API_KEY: "k" } as NodeJS.ProcessEnv);
+    expect(a.provider).toBe("anthropic");
+    expect(a.model).toBe("claude-haiku-5-5");
+    expect(resolveConfig({ ANTHROPIC_API_KEY: "k", HF_TOKEN: "hf" } as NodeJS.ProcessEnv).provider).toBe("anthropic");
+    expect(resolveConfig({ ANTHROPIC_API_KEY: "k", HF_TOKEN: "hf", AI_PROVIDER: "openai-compatible" } as NodeJS.ProcessEnv).provider).toBe("openai-compatible");
     expect(resolveConfig({} as NodeJS.ProcessEnv).provider).toBe("none");
     expect(resolveConfig({ AI_PROVIDER: "openai-compatible", AI_BASE_URL: "http://localhost:11434/v1/", AI_MODEL: "llama" } as NodeJS.ProcessEnv)).toMatchObject({ baseUrl: "http://localhost:11434/v1", model: "llama" });
   });
@@ -39,7 +43,7 @@ describe("reply parsing", () => {
 describe("rate limiter", () => {
   it("limits per minute and per day", () => {
     let t = 0;
-    const rl = new RateLimiter({ perMinute: 2, perDay: 3, maxMessageChars: 100 }, () => t);
+    const rl = new RateLimiter({ perMinute: 2, perDay: 3, maxMessageChars: 100, globalPerDay: 4 }, () => t);
     expect(rl.check("a")).toBeNull();
     expect(rl.check("a")).toBeNull();
     expect(rl.check("a")).toBe("minute");
@@ -47,6 +51,9 @@ describe("rate limiter", () => {
     expect(rl.check("a")).toBeNull();
     expect(rl.check("a")).toBe("day");
     expect(rl.check("b")).toBeNull();
+    // The global brake ignores the per-minute rule and has its own daily cap.
+    for (let i = 0; i < 4; i++) expect(rl.check(GLOBAL_KEY)).toBeNull();
+    expect(rl.check(GLOBAL_KEY)).toBe("day");
   });
   it("keys by device header, else forwarded ip", () => {
     expect(deviceKey({ "x-jam-device": "abc12345-dev" }, "1.1.1.1")).toBe("d:abc12345-dev");

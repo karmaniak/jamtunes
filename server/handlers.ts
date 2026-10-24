@@ -3,7 +3,7 @@
  * the Vercel functions. Returns {status, body}; the adapters do the I/O.
  */
 import { resolveConfig, runChat, type ChatRequest } from "./ai";
-import { deviceKey, limitsFromEnv, RateLimiter } from "./ratelimit";
+import { deviceKey, GLOBAL_KEY, limitsFromEnv, RateLimiter } from "./ratelimit";
 
 export interface HandlerResult {
   status: number;
@@ -25,6 +25,9 @@ export async function chat(rawBody: unknown, headers: Record<string, string | st
   const cfg = resolveConfig();
   if (cfg.provider === "none") return { status: 200, body: { source: "local", reason: "no-provider" } };
 
+  if (limiter.check(GLOBAL_KEY)) {
+    return { status: 429, body: { error: "The band's AI is fully booked today; tempo, style, key and chord requests still work.", source: "local", reason: "rate-global" } };
+  }
   const limited = limiter.check(deviceKey(headers, ip));
   if (limited) {
     return {

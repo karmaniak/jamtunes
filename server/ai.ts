@@ -31,10 +31,16 @@ export const DEFAULT_OPENAI_BASE_URL = "https://router.huggingface.co/v1";
 export const DEFAULT_OPENAI_MODEL = "Qwen/Qwen2.5-72B-Instruct";
 export const DEFAULT_ANTHROPIC_MODEL = "claude-haiku-5-5";
 
+/**
+ * Provider precedence: explicit AI_PROVIDER, else Anthropic when a key is set
+ * (Claude Haiku 5.5 is the cheap default), else an OpenAI-compatible endpoint
+ * when HF_TOKEN / AI_API_KEY is set, else the local interpreter only.
+ */
 export function resolveConfig(env: NodeJS.ProcessEnv = process.env): AIConfig {
   const explicit = env.AI_PROVIDER as ProviderKind | undefined;
   const openaiKey = env.AI_API_KEY ?? env.HF_TOKEN ?? "";
-  const provider: ProviderKind = explicit && explicit !== "none" ? explicit : openaiKey ? "openai-compatible" : env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN ? "anthropic" : "none";
+  const anthropicKey = !!(env.ANTHROPIC_API_KEY || env.ANTHROPIC_AUTH_TOKEN);
+  const provider: ProviderKind = explicit && explicit !== "none" ? explicit : anthropicKey ? "anthropic" : openaiKey ? "openai-compatible" : "none";
   return {
     provider,
     model: env.AI_MODEL ?? (provider === "anthropic" ? DEFAULT_ANTHROPIC_MODEL : DEFAULT_OPENAI_MODEL),
@@ -170,15 +176,17 @@ async function runAnthropic(req: ChatRequest, cfg: AIConfig): Promise<ChatResult
     ...req.history.slice(-8).map((h) => ({ role: h.role, content: h.content }) as Anthropic.Beta.BetaMessageParam),
     { role: "user", content: `Current sheet:\n${req.sheetSummary}\n\nRequest: ${req.message}` },
   ];
+  // Haiku has no server-side refusal fallback; the Opus/Sonnet tiers do.
+  const haiku = /haiku/i.test(cfg.model);
   const response = await client.beta.messages.parse({
     model: cfg.model,
-    max_tokens: 4096,
+    max_tokens: 2048,
     system: SYSTEM,
     messages,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
+    ...(haiku ? {} : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }),
     output_config: { format: zodOutputFormat(SheetChangesSchema), effort: "low" },
   });
+  if (process.env.AI_DEBUG) console.log(`[ai] ${response.model} replied:\n${JSON.stringify(response.parsed_output).slice(0, 2000)}`);
   if (response.stop_reason === "refusal") return { changes: emptyChanges("I can't help with that one — try a musical request."), source: "ai", model: response.model };
   const parsed = response.parsed_output ? coerceChanges(response.parsed_output) : null;
   if (!parsed) throw new Error("AI reply was not a valid sheet change");

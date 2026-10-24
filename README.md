@@ -22,15 +22,15 @@ npm run dev                   # web on :5173, api on :8787
 
 ### The band's AI (operator setup — users configure nothing)
 
-"Tell the band" works without any AI for tempo / style / key / mode / instruments / chord lists (a deterministic interpreter). Free-form requests ("moody 6/8 ballad in D dorian") go to a language model that you, the operator, configure once with environment variables. The default is an open model on Hugging Face's OpenAI-compatible router:
+"Tell the band" works without any AI for tempo / style / key / mode / instruments / chord lists (a deterministic interpreter). Free-form requests ("moody 6/8 ballad in D dorian") go to a language model that you, the operator, configure once with environment variables. The default is **Claude Haiku 5.5** — about $0.0004 per request, ~2,500 requests per dollar:
 
 ```bash
 cp .env.example .env
-# HF_TOKEN=hf_...            from https://huggingface.co/settings/tokens
-npm run dev                  # logs "chat: openai-compatible · Qwen/Qwen2.5-72B-Instruct"
+# ANTHROPIC_API_KEY=sk-ant-...   from https://console.anthropic.com
+npm run dev                      # logs "chat: anthropic · claude-haiku-5-5"
 ```
 
-Overrides: `AI_MODEL` (any chat model the endpoint serves — the 72B default has far better chord sense than 7B-class models), `AI_BASE_URL` + `AI_API_KEY` (vLLM, Ollama, Together, Groq…), or `AI_PROVIDER=anthropic` with `ANTHROPIC_API_KEY`. Every model reply is validated against the `SheetChanges` schema; anything malformed falls back to the local interpreter, so a weak model can never corrupt the sheet, and every chat reply ends with a receipt of what actually changed on the sheet. Per-device fair-use limits: `AI_LIMIT_PER_MINUTE` (10), `AI_LIMIT_PER_DAY` (60), `AI_MAX_MESSAGE_CHARS` (2000). Set `AI_DEBUG=1` to log raw model replies when something looks off.
+Overrides: `AI_MODEL` (`claude-sonnet-5-5` / `claude-opus-5-5` for better answers at higher cost), or `AI_PROVIDER=openai-compatible` with `AI_BASE_URL` + `AI_API_KEY`/`HF_TOKEN` for any `/v1/chat/completions` endpoint (Hugging Face router, vLLM, Ollama, Together, Groq…). Every model reply is validated against the `SheetChanges` schema; anything malformed falls back to the local interpreter, so a weak model can never corrupt the sheet, and every chat reply ends with a receipt of what actually changed. Spend brakes: `AI_LIMIT_PER_MINUTE` (10) and `AI_LIMIT_PER_DAY` (60) per device, `AI_GLOBAL_PER_DAY` (5000, everyone combined), `AI_MAX_MESSAGE_CHARS` (2000). Set `AI_DEBUG=1` to log model replies when something looks off.
 
 ### Deploy
 
