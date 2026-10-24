@@ -5,7 +5,7 @@
   "description": "Chord-sheet-first jam track generator. Describe a progression, get a MIDI-driven backing track to jam over.",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "concurrently -n web,api -c cyan,magenta \"vite\" \"tsx watch server/index.ts\"",

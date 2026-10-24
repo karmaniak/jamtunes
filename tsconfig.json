@@ -13,7 +13,6 @@
     "isolatedModules": true,
     "resolveJsonModule": true,
     "noEmit": true,
-    "types": ["vite/client"],
     "paths": {
       "@core/*": ["./src/core/*"],
       "@audio/*": ["./src/audio/*"],
