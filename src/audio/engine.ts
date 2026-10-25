@@ -41,6 +41,34 @@ interface PlayOptions {
 const LOOKAHEAD_S = 0.3;
 const TICK_MS = 60;
 
+/** A tiny silent WAV (data URI) used to put iOS into "playback" audio mode. */
+const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+
+let unlockElement: HTMLAudioElement | null = null;
+
+/**
+ * iOS mutes Web Audio under the ring/silent switch unless an HTML media
+ * element is playing; it also needs the context resumed inside a user
+ * gesture. Call this synchronously from a tap/click handler.
+ */
+export function unlockMobileAudio(ctx?: AudioContext | null) {
+  try {
+    if (!unlockElement) {
+      const el = document.createElement("audio");
+      el.src = SILENT_WAV;
+      el.loop = true;
+      el.setAttribute("playsinline", "");
+      el.setAttribute("webkit-playsinline", "");
+      el.preload = "auto";
+      unlockElement = el;
+    }
+    void unlockElement.play().catch(() => {});
+  } catch {
+    /* no DOM or autoplay refused: nothing to do */
+  }
+  if (ctx && ctx.state === "suspended") void ctx.resume().catch(() => {});
+}
+
 export class JamEngine {
   private ctx: AudioContext | null = null;
   private reverbInput: AudioNode | null = null;
@@ -76,6 +104,7 @@ export class JamEngine {
     if (this.ctx) return this.ctx;
     const ctx = new AudioContext({ latencyHint: "interactive" });
     this.ctx = ctx;
+    this.watchVisibility(ctx);
 
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14;
@@ -269,6 +298,19 @@ export class JamEngine {
     return this.state === "playing";
   }
 
+  /** "running" when sound can actually come out; "suspended" means the OS/browser is holding it. */
+  get contextState(): AudioContextState | "none" {
+    return this.ctx?.state ?? "none";
+  }
+
+  /** Phones suspend the context when the app goes to the background; pick it back up. */
+  private watchVisibility(ctx: AudioContext) {
+    if (typeof document === "undefined") return;
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && this.state === "playing" && ctx.state === "suspended") void ctx.resume().catch(() => {});
+    });
+  }
+
   private secondsPerBeat(): number {
     const t = this.timeline!;
     const spb = 60 / t.tempo;
@@ -277,6 +319,8 @@ export class JamEngine {
 
   async play(timeline: Timeline, arrangement: Arrangement, opts: PlayOptions): Promise<void> {
     this.stop(false);
+    // Must happen synchronously inside the user's tap for iOS to allow sound.
+    unlockMobileAudio(this.ensureContext());
     await this.prepare(arrangement);
     const ctx = this.ensureContext();
     if (ctx.state === "suspended") await ctx.resume();

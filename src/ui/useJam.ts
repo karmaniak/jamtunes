@@ -206,7 +206,14 @@ export function useJam() {
 
   const play = useCallback(async () => {
     try {
-      await engine().play(timelineRef.current!, sheetRef.current.arrangement, { loop });
+      const e = engine();
+      await e.play(timelineRef.current!, sheetRef.current.arrangement, { loop });
+      // If the OS is still holding the audio context a moment later, say so instead of staying silent.
+      window.setTimeout(() => {
+        if (e.isPlaying && e.contextState !== "running") {
+          setNotice("No sound? Your phone is blocking audio — flip the ring/silent switch, turn the volume up, or tap Play again.");
+        }
+      }, 1200);
     } catch (err) {
       setNotice(`Couldn't start audio: ${err instanceof Error ? err.message : String(err)}`);
     }
